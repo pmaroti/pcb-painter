@@ -354,6 +354,9 @@ function extraIcLibrary() {
     quad('qfn16', 'QFN-16 3x3 mm 0.5', 4, 0.5, 1.45, 0.85, 0.25, 3, 1.7),
     quad('qfn20', 'QFN-20 4x4 mm 0.5', 5, 0.5, 1.95, 0.85, 0.25, 4, 2.6),
     quad('qfn32', 'QFN-32 5x5 mm 0.5', 8, 0.5, 2.45, 0.85, 0.25, 5, 3.45),
+    // surface-mount DIP (gull-wing leads, 100 mil pitch)
+    ...[8, 14, 16, 18, 20, 24, 28].map(n => soN('smdip' + n, `SMD DIP-${n} 300 mil`, n, 2.54, 4.77, 2.4, 1.6, 3.3)),
+    ...[24, 28, 40].map(n => soN('smdip' + n + '_600', `SMD DIP-${n} 600 mil`, n, 2.54, 8.58, 2.4, 1.6, 6.6)),
     {id:'sot23_5', name:'SOT-23-5', prefix:'U', type:'smd',
       pads:[smdPad(1,-0.95,1.15,0.6,1.1), smdPad(2,0,1.15,0.6,1.1), smdPad(3,0.95,1.15,0.6,1.1), smdPad(4,0.95,-1.15,0.6,1.1), smdPad(5,-0.95,-1.15,0.6,1.1)],
       silk:[sLine(-1.5,-0.45,-1.5,0.45), sLine(1.5,-0.45,1.5,0.45), {t:'circle', x:-1.6, y:1.6, r:0.2, w:0.15}]},
@@ -387,6 +390,14 @@ function extraTransistorLibrary() {
     {id:'sot323', name:'SOT-323 (SC-70)', prefix:'Q', type:'smd',
       pads:[smdPad(1,-0.65,0.95,0.6,0.7), smdPad(2,0.65,0.95,0.6,0.7), smdPad(3,0,-0.95,0.6,0.7)],
       silk:[sLine(-1.1,-0.4,-0.5,-0.4), sLine(0.5,-0.4,1.1,-0.4), sLine(-1.1,-0.4,-1.1,0.3), sLine(1.1,-0.4,1.1,0.3)]},
+    // SOT143B: 4 leads, pin 1 is the wide lead (pitch 1.7 mm on the pin 1 side, 1.9 mm on the other)
+    {id:'sot143b', name:'SOT-143B', prefix:'Q', type:'smd',
+      pads:[smdPad(1,-0.75,1.1,1.0,1.1), smdPad(2,0.95,1.1,0.6,1.1), smdPad(3,0.95,-1.1,0.6,1.1), smdPad(4,-0.95,-1.1,0.6,1.1)],
+      silk:[sLine(-1.6,-0.4,-1.6,0.4), sLine(1.6,-0.4,1.6,0.4), sLine(-0.3,-0.75,0.3,-0.75), sLine(0.1,0.75,0.4,0.75), {t:'circle', x:-1.8, y:1.5, r:0.2, w:0.15}]},
+    // SOT103: X-package (round body, four flat leads in a cross)
+    {id:'sot103', name:'SOT-103 (X-package)', prefix:'Q', type:'smd',
+      pads:[smdPad(1,-3.6,0,3.0,1.1), smdPad(2,0,3.6,1.1,3.0), smdPad(3,3.6,0,3.0,1.1), smdPad(4,0,-3.6,1.1,3.0)],
+      silk:[{t:'circle', x:0, y:0, r:1.9, w:0.15}, sLine(-2.4,-0.9,-1.6,-1.7)]},
     {id:'sot89', name:'SOT-89', prefix:'Q', type:'smd',
       pads:[smdPad(1,-1.5,1.85,0.9,1.4), smdPad(2,0,1.85,0.9,1.4), smdPad(3,1.5,1.85,0.9,1.4), smdPad(2,0,-0.6,1.8,2.6)],
       silk:[...sRect(-2.3,-1.3,2.3,1.0)]},
@@ -508,7 +519,7 @@ function baseLibrary() {
 }
 
 function newDesign() {
-  return {format:'pcb-painter', version:4, name:'Untitled board', board:{w:100, h:80},
+  return {format:'pcb-painter', version:5, name:'Untitled board', board:{w:100, h:80},
     settings:{grid:1.27, snap:true, traceWidth:0.8, angleMode:'90', textHeight:2},
     library:defaultLibrary(), components:[], traces:[], texts:[], polys:[]};
 }
@@ -847,7 +858,7 @@ function validateDesign(o) {
   d.traces = o.traces.filter(t => Array.isArray(t.pts) && t.pts.length >= 2).map(t => ({id:t.id || uid(), w:+t.w || 0.5, pts:t.pts.map(p => ({x:+p.x, y:+p.y}))}));
   d.texts = (Array.isArray(o.texts) ? o.texts : []).filter(x => x && x.s).map(x => ({id:x.id || uid(), s:String(x.s), x:+x.x || 0, y:+x.y || 0, h:+x.h || 2, rot:normRot(+x.rot || 0), mirror:!!x.mirror}));
   d.polys = (Array.isArray(o.polys) ? o.polys : []).filter(g => Array.isArray(g.pts) && g.pts.length >= 3).map(g => ({id:g.id || uid(), pts:g.pts.map(p => ({x:+p.x, y:+p.y}))}));
-  // designs from before version 4 get the footprints that were added to the built-in library since
+  // designs from before version 5 get the footprints that were added to the built-in library since
   // version 3 briefly shipped metric-pitch capacitors and standing diodes; drop those that are not used
   if (!(+o.version >= 4)) {
     const old = ['c_disc_2', 'c_disc_2_5', 'c_disc_3', 'c_disc_3_5', 'c_disc_4', 'c_disc_5', 'c_disc_7_5', 'd_stand_2_54', 'd_stand_3_5', 'd_stand_5_08'];
@@ -855,7 +866,7 @@ function validateDesign(o) {
     const lib254 = d.library.find(l => l.id === 'c_disc_254'); if (lib254 && lib254.name === 'Capacitor disc 2.54 mm') lib254.name = 'Capacitor 100 mil';
     for (const l of d.library) { const m = /^Resistor standing (2\.54|5\.08) mm$/.exec(l.name); if (m) l.name = `Resistor standing ${m[1] === '2.54' ? 100 : 200} mil`; }
   }
-  if (!(+o.version >= 4)) for (const l of defaultLibrary()) if (!d.library.some(x => x.id === l.id)) d.library.push(l);
+  if (!(+o.version >= 5)) for (const l of defaultLibrary()) if (!d.library.some(x => x.id === l.id)) d.library.push(l);
   return d;
 }
 function normLib(l) {
@@ -883,7 +894,7 @@ function download(name, blob) {
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 const safeName = s => (s || 'board').replace(/[^\w\-. ]+/g, '_').trim() || 'board';
-function saveDesign() { const out = {...D, format:'pcb-painter', version:4}; saveFile(safeName(D.name) + '.json', JSON.stringify(out, null, 1)); }
+function saveDesign() { const out = {...D, format:'pcb-painter', version:5}; saveFile(safeName(D.name) + '.json', JSON.stringify(out, null, 1)); }
 
 /* ---------------- toolbar ---------------- */
 function fillPresetSelect(selEl, presets) {
