@@ -43,6 +43,9 @@ aside{background:var(--panel);overflow:auto;min-height:0}
 .libitem button:hover{opacity:1}
 #stage{position:relative;min-width:0;min-height:0;overflow:hidden}
 #stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+#textEd{position:absolute;z-index:3;display:flex;flex-direction:column;gap:3px;background:var(--panel);border:1px solid var(--accent);border-radius:6px;padding:6px;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+#textEd.hidden{display:none}
+#textEd input{width:220px;font-size:14px}
 #status{display:flex;gap:16px;padding:4px 10px;background:var(--panel);border-top:1px solid var(--line);color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden}
 #status b{color:var(--text);font-weight:500}
 .hint{color:var(--muted);font-size:12px;line-height:1.5}
@@ -146,7 +149,9 @@ aside{background:var(--panel);overflow:auto;min-height:0}
   </div>
 
   <div id="main">
-    <div id="stage"><canvas id="cv"></canvas></div>
+    <div id="stage"><canvas id="cv"></canvas>
+      <div id="textEd" class="hidden"><input id="textEdIn" type="text" autocomplete="off" spellcheck="false" placeholder="Text to place on the copper layer:"><span class="hint">Enter places the text · Esc cancels</span></div>
+    </div>
     <aside id="right">
       <div id="props"></div>
       <div class="sec hint">
@@ -627,7 +632,8 @@ function render() {
       ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]); } }
   }
   // text ghost
-  if (tool === 'text' && mouse.in) {
+  if (textPending) { const r = 5 / V.s; ctx.strokeStyle = PAL.sel; ctx.lineWidth = 1.5 / V.s; ctx.beginPath(); ctx.moveTo(textPending.x - r, textPending.y); ctx.lineTo(textPending.x + r, textPending.y); ctx.moveTo(textPending.x, textPending.y - r); ctx.lineTo(textPending.x, textPending.y + r); ctx.stroke(); }
+  else if (tool === 'text' && mouse.in) {
     const p = snapAt(mouse, {pins:false});
     ctx.globalAlpha = 0.5; P.ctext({x:p.x, y:p.y, s:'Text', h:D.settings.textHeight || 2, rot:0}, 'copper'); ctx.globalAlpha = 1;
   }
@@ -837,6 +843,7 @@ $('#wNum').onchange = e => setWidth(e.target.value);
 $('#snapChk').onchange = e => { D.settings.snap = e.target.checked; changed(); };
 $$('[data-angle]').forEach(b => b.onclick = () => { D.settings.angleMode = b.dataset.angle; syncToolbar(); changed(); });
 function setTool(t) {
+  if (textPending) commitText(t !== 'text');
   if (t !== tool) draft = null;
   if (t !== 'place') placeLib = null;
   tool = t; syncToolbar(); requestRender();
@@ -1170,9 +1177,7 @@ cv.addEventListener('mousedown', e => {
     requestRender(); return;
   }
   if (tool === 'text') {
-    const p = snapAt(m, {pins:false});
-    const s = prompt(t('Text to place on the copper layer:'), '');
-    if (s && s.trim()) { pushUndo(); const o = {id:uid(), s, x:p.x, y:p.y, h:D.settings.textHeight || 2, rot:0, mirror:false}; D.texts.push(o); sel = {kind:'text', id:o.id}; changed(); }
+    openTextEditor(snapAt(m, {pins:false}));
     return;
   }
   // select
@@ -1213,6 +1218,34 @@ window.addEventListener('mouseup', () => {
   if (drag.type !== 'pan' && drag.moved) { pushUndo(drag.snap); changed(); }
   drag = null;
 });
+// on-canvas text entry box (a browser prompt() can be blocked, so text is typed into this box instead)
+let textPending = null;
+function openTextEditor(p) {
+  if (textPending) commitText();
+  textPending = {x:p.x, y:p.y};
+  const ed = $('#textEd'), r = $('#stage').getBoundingClientRect();
+  const sx = (p.x - V.x) * V.s, sy = (p.y - V.y) * V.s;
+  ed.classList.remove('hidden');
+  ed.style.left = Math.max(4, Math.min(sx, r.width - ed.offsetWidth - 4)) + 'px';
+  ed.style.top = Math.max(4, Math.min(sy + 8, r.height - ed.offsetHeight - 4)) + 'px';
+  const inp = $('#textEdIn'); inp.value = ''; setTimeout(() => inp.focus(), 0);
+  requestRender();
+}
+function commitText(cancel = false) {
+  const p = textPending; textPending = null;
+  $('#textEd').classList.add('hidden');
+  const s = $('#textEdIn').value; $('#textEdIn').value = '';
+  if (!cancel && p && s.trim()) {
+    pushUndo(); const o = {id:uid(), s, x:p.x, y:p.y, h:D.settings.textHeight || 2, rot:0, mirror:false};
+    D.texts.push(o); sel = {kind:'text', id:o.id}; changed();
+  }
+  requestRender();
+}
+$('#textEdIn').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); commitText(); }
+  else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); commitText(true); }
+});
+$('#textEdIn').addEventListener('blur', () => { if (textPending) commitText(); });
 cv.addEventListener('dblclick', e => { if (tool === 'trace' || tool === 'poly') finishTrace(); });
 
 window.addEventListener('keydown', e => {
@@ -1660,7 +1693,7 @@ const HU = {
   'Click to add corners; click the first corner or press Enter / double-click / right-click to close the polygon. Esc cancels.':'Kattintással sarokpontot adsz hozzá; az első sarokpontra kattintás, Enter, dupla kattintás vagy jobb klikk lezárja a poligont. Az Esc megszakítja.',
   'Click to start a copper polygon ({0} mode).':'Kattints a réz poligon indításához ({0} mód).',
   'Click where the text should start (bottom-left corner).':'Kattints oda, ahol a szöveg kezdődjön (bal alsó sarok).',
-  'Text to place on the copper layer:':'A rézrétegre kerülő szöveg:',
+  'Text to place on the copper layer:':'A rézrétegre kerülő szöveg:', 'Enter places the text · Esc cancels':'Enter elhelyezi a szöveget · Esc mégse',
 };
 let LANG = 'en';
 try { LANG = localStorage.getItem('pcbpainter.lang') || ((navigator.language || '').toLowerCase().startsWith('hu') ? 'hu' : 'en'); } catch (e) {}
