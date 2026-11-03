@@ -6,11 +6,11 @@ The whole app is one self-contained file, `index.html`. Open it in Chrome, Edge 
 
 ## Features
 
-- **Component library** with 80 built-in footprints, sorted into categories (RCL, Diodes, Transistors, ICs, Modules, Connectors, Other) and split into SMD and THT under each category:
+- **Component library** with 76 built-in footprints, sorted into categories (RCL, Diodes, Transistors, ICs, Modules, Connectors, Other) and split into SMD and THT under each category:
   - **ICs:** DIP-8 to DIP-40 (300 and 600 mil), SOIC-8/14/16, SOIC-16W/20W/28W, MSOP-8, TSSOP-8/14/16/20, TQFP-32/44/48/64, LQFP-100, QFN-16/20/32, SOT-23-5/6.
   - **Transistors:** TO-92 (2.54 and 1.27 mm), TO-18, TO-126, TO-220 (vertical and lying), TO-247, SOT-23, SOT-323, SOT-89, SOT-223, DPAK and D2PAK.
-  - **RCL:** disc capacitors at 2, 2.5, 2.54, 3, 3.5, 4, 5 and 7.5 mm pitch; electrolytic capacitors from D4 to D16 mm; axial resistors at 300, 400, 500 and 600 mil; standing resistors at 2.54 and 5.08 mm; 0805 and 1206.
-  - **Diodes:** axial at 300, 400 and 500 mil; standing at 2.54, 3.5 and 5.08 mm; 5 mm LED.
+  - **RCL:** capacitors at 100, 200, 300, 400 and 500 mil pitch; electrolytic capacitors from D4 to D16 mm; axial resistors at 300, 400, 500 and 600 mil; standing resistors at 100 and 200 mil; 0805 and 1206.
+  - **Diodes:** axial at 300, 400 and 500 mil; standing at 100 and 200 mil; 5 mm LED.
   - **Modules:** Raspberry Pi Pico, Waveshare RP2040-Zero and ESP32-C3 SuperMini, soldered on with pin headers.
   - **Connectors:** pin headers.
 
