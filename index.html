@@ -163,7 +163,9 @@ aside{background:var(--panel);overflow:auto;min-height:0}
         <kbd>L</kbd> library &nbsp; <kbd>P</kbd> polygon &nbsp; <kbd>X</kbd> text<br>
         <kbd>M</kbd> mirror component / text<br>
         <kbd>Enter</kbd>, double-click or right-click finishes a trace. Clicking a pin finishes it too.<br>
-        Wheel zooms. Drag empty space, middle button or <kbd>Space</kbd>+drag pans.<br>
+        Drag on empty space selects an area; <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+click adds or removes; drag a selected object to move the selection.<br>
+        <kbd>Ctrl/Cmd+C</kbd> copy, <kbd>Ctrl/Cmd+X</kbd> cut, <kbd>Ctrl/Cmd+V</kbd> paste at the mouse, <kbd>Ctrl/Cmd+A</kbd> select all.<br>
+        Wheel zooms. Right or middle button drag, or <kbd>Space</kbd>+drag pans.<br>
         <kbd>Ctrl+Z</kbd>/<kbd>Ctrl+Y</kbd> undo/redo, <kbd>Ctrl+S</kbd> save.
       </div>
     </aside>
@@ -743,16 +745,24 @@ function render() {
       for (const p of lib.pads) { const w = padWorld(c, p); P.circle(w.tx, w.ty, Math.max(0.12, 2 / V.s), 'term'); } }
   }
   // selection
-  if (sel) {
-    if (sel.kind === 'trace') { const t = D.traces.find(t => t.id === sel.id); if (t) { ctx.globalAlpha = 0.55; tracePrims(P, t, 'sel'); ctx.globalAlpha = 1; } }
-    if (sel.kind === 'comp') { const c = D.components.find(c => c.id === sel.id); if (c) {
-      const b = compBBox(c); ctx.strokeStyle = PAL.sel; ctx.lineWidth = 1.5 / V.s; ctx.setLineDash([5 / V.s, 4 / V.s]);
-      ctx.strokeRect(b.x0 - 0.4, b.y0 - 0.4, b.x1 - b.x0 + 0.8, b.y1 - b.y0 + 0.8); ctx.setLineDash([]); } }
-    if (sel.kind === 'text' || sel.kind === 'poly') { const o = findSel(); if (o) {
-      const pts = sel.kind === 'text' ? textCorners(o) : o.pts;
-      if (sel.kind === 'poly') { ctx.globalAlpha = 0.35; P.poly(pts, 'sel'); ctx.globalAlpha = 1; }
-      ctx.strokeStyle = PAL.sel; ctx.lineWidth = 1.5 / V.s; ctx.setLineDash([5 / V.s, 4 / V.s]);
-      ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]); } }
+  for (const x of selSet) {
+    const o = objOf(x); if (!o) continue;
+    ctx.strokeStyle = PAL.sel; ctx.lineWidth = 1.5 / V.s;
+    if (x.kind === 'trace') { ctx.globalAlpha = 0.55; tracePrims(P, o, 'sel'); ctx.globalAlpha = 1; continue; }
+    ctx.setLineDash([5 / V.s, 4 / V.s]);
+    if (x.kind === 'comp') { const b = compBBox(o); ctx.strokeRect(b.x0 - 0.4, b.y0 - 0.4, b.x1 - b.x0 + 0.8, b.y1 - b.y0 + 0.8); }
+    else {
+      const pts = x.kind === 'text' ? textCorners(o) : o.pts;
+      if (x.kind === 'poly') { ctx.globalAlpha = 0.35; P.poly(pts, 'sel'); ctx.globalAlpha = 1; }
+      ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.closePath(); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+  // area selection rectangle
+  if (drag && drag.type === 'band' && drag.x1 !== undefined) {
+    const x0 = Math.min(drag.x0, drag.x1), y0 = Math.min(drag.y0, drag.y1), w = Math.abs(drag.x1 - drag.x0), h = Math.abs(drag.y1 - drag.y0);
+    ctx.fillStyle = 'rgba(79,195,247,0.08)'; ctx.fillRect(x0, y0, w, h);
+    ctx.strokeStyle = PAL.sel; ctx.lineWidth = 1 / V.s; ctx.setLineDash([4 / V.s, 3 / V.s]); ctx.strokeRect(x0, y0, w, h); ctx.setLineDash([]);
   }
   // text ghost
   if (textPending) { const r = 5 / V.s; ctx.strokeStyle = PAL.sel; ctx.lineWidth = 1.5 / V.s; ctx.beginPath(); ctx.moveTo(textPending.x - r, textPending.y); ctx.lineTo(textPending.x + r, textPending.y); ctx.moveTo(textPending.x, textPending.y - r); ctx.lineTo(textPending.x, textPending.y + r); ctx.stroke(); }
@@ -841,7 +851,7 @@ function finishPoly() {
     let pts = cleanPts(draft.pts);
     if (pts.length > 1 && dist(pts[0], pts[pts.length - 1]) < 1e-6) pts.pop();
     pts = cleanPts([...pts, pts[0]]).slice(0, -1);
-    if (pts.length >= 3 && polyArea(pts) > 1e-6) { pushUndo(); const g = {id:uid(), pts}; D.polys.push(g); sel = {kind:'poly', id:g.id}; changed(); }
+    if (pts.length >= 3 && polyArea(pts) > 1e-6) { pushUndo(); const g = {id:uid(), pts}; D.polys.push(g); setSel({kind:'poly', id:g.id}); changed(); }
   }
   draft = null; requestRender();
 }
@@ -883,11 +893,18 @@ function reattach(c, ends) {
 /* ---------------- undo / persistence ---------------- */
 const snapshot = () => JSON.stringify({library:D.library, components:D.components, traces:D.traces, texts:D.texts, polys:D.polys, board:D.board, name:D.name});
 function pushUndo(s = snapshot()) { undoStack.push(s); if (undoStack.length > 300) undoStack.shift(); redoStack.length = 0; }
-function restore(s) { Object.assign(D, JSON.parse(s)); if (sel && !findSel()) sel = null; changed(true); }
+function restore(s) { Object.assign(D, JSON.parse(s)); pruneSel(); changed(true); }
 function undo() { if (!undoStack.length) return; redoStack.push(snapshot()); restore(undoStack.pop()); }
 function redo() { if (!redoStack.length) return; undoStack.push(snapshot()); restore(redoStack.pop()); }
 const SEL_LIST = {comp:'components', trace:'traces', text:'texts', poly:'polys'};
 function findSel() { return sel && (D[SEL_LIST[sel.kind]] || []).find(o => o.id === sel.id); }
+// selSet holds every selected object; sel is the single selected object (null when 0 or several are selected)
+let selSet = [];
+const objOf = x => (D[SEL_LIST[x.kind]] || []).find(o => o.id === x.id);
+const inSel = x => selSet.some(y => y.kind === x.kind && y.id === x.id);
+function setSelection(list) { selSet = list.filter(x => x && objOf(x)); sel = selSet.length === 1 ? selSet[0] : null; }
+function setSel(x) { setSelection(x ? [x] : []); }
+function pruneSel() { setSelection(selSet); }
 let saveTimer = 0;
 function changed(libToo = false) {
   requestRender(); renderProps(); if (libToo) renderLib();
@@ -925,7 +942,7 @@ function normLib(l) {
     silk:(l.silk || []).filter(s => s.t === 'line' || s.t === 'circle')};
 }
 function loadDesign(d) {
-  D = d; sel = null; draft = null; tool = 'select'; placeLib = null; undoStack.length = 0; redoStack.length = 0;
+  D = d; setSel(null); draft = null; tool = 'select'; placeLib = null; undoStack.length = 0; redoStack.length = 0;
   syncToolbar(); renderLib(); changed(); fitView();
 }
 async function saveFile(name, text) {
@@ -963,7 +980,8 @@ function syncToolbar() {
 function setGrid(v) { v = +v; if (!(v > 0)) return; D.settings.grid = r4(v); syncToolbar(); changed(); }
 function setWidth(v) {
   v = +v; if (!(v > 0)) return; D.settings.traceWidth = r4(v); syncToolbar();
-  const t = sel && sel.kind === 'trace' && findSel(); if (t && t.w !== D.settings.traceWidth) { pushUndo(); t.w = D.settings.traceWidth; }
+  const tr_ = selSet.filter(x => x.kind === 'trace').map(objOf).filter(o => o && o.w !== D.settings.traceWidth);
+  if (tr_.length) { pushUndo(); for (const o of tr_) o.w = D.settings.traceWidth; }
   changed();
 }
 $('#gSel').onchange = e => { if (e.target.value) setGrid(e.target.value); else $('#gNum').focus(); };
@@ -1127,7 +1145,7 @@ function libDelete(id) {
   if (!confirm(used ? t('This footprint is used by {0} placed component(s). Delete it and those components?', used) : t('Delete this footprint?'))) return;
   const list = libMatches($('#libSearch').value), i = list.findIndex(l => l.id === id);
   pushUndo(); D.library = D.library.filter(l => l.id !== id); D.components = D.components.filter(c => c.lib !== id);
-  if (placeLib === id) setTool('select'); if (sel && sel.kind === 'comp' && !findSel()) sel = null;
+  if (placeLib === id) setTool('select'); pruneSel();
   const next = list[i + 1] || list[i - 1]; libSelId = next ? next.id : null;
   changed(true); libPreview();
 }
@@ -1182,7 +1200,16 @@ function renderProps() {
   const fields = [];
   let html = '';
   const add = f => { fields.push(f); return f.html; };
-  if (o && sel.kind === 'comp') {
+  if (selSet.length > 1) {
+    const cnt = k => selSet.filter(x => x.kind === k).length;
+    html = `<div class="sec"><h3>Selection</h3>
+      <div class="row"><label>Components</label><span>${cnt('comp')}</span></div>
+      <div class="row"><label>Traces</label><span>${cnt('trace')}</span></div>
+      <div class="row"><label>Polygons</label><span>${cnt('poly')}</span></div>
+      <div class="row"><label>Texts</label><span>${cnt('text')}</span></div>
+      <div class="hint">Drag any selected object to move them all. Ctrl/Cmd+C copies, Ctrl/Cmd+X cuts, Ctrl/Cmd+V pastes at the mouse.</div>
+      <div class="row"><button id="pCopy">Copy</button><button id="pDel" class="danger">Delete</button></div></div>`;
+  } else if (o && sel.kind === 'comp') {
     const lib = libById(o.lib);
     html = `<div class="sec"><h3>Component</h3>
       <div class="row"><label>Reference</label><input type="text" id="pRef" value="${esc(o.ref)}"></div>
@@ -1241,13 +1268,14 @@ function renderProps() {
   if (q('#pCMir')) q('#pCMir').onchange = e => mirrorComp(o, e.target.checked);
   if (q('#pRotBtn')) q('#pRotBtn').onclick = () => rotateComp(o, 90);
   if (q('#pDel')) q('#pDel').onclick = deleteSel;
+  if (q('#pCopy')) q('#pCopy').onclick = () => copySel();
 }
 function mirrorComp(c, on = !c.mirror) { pushUndo(); const ends = attachedEnds(c); c.mirror = on; reattach(c, ends); changed(); }
 function rotateComp(c, by) { pushUndo(); const ends = attachedEnds(c); c.rot = normRot(c.rot + by); reattach(c, ends); changed(); }
 function deleteSel() {
-  if (!sel) return; pushUndo();
-  const k = SEL_LIST[sel.kind]; D[k] = D[k].filter(x => x.id !== sel.id);
-  sel = null; changed();
+  if (!selSet.length) return; pushUndo();
+  for (const x of selSet) { const k = SEL_LIST[x.kind]; D[k] = D[k].filter(o => o.id !== x.id); }
+  setSel(null); changed();
 }
 function nextRef(prefix) {
   let n = 0; const re = new RegExp('^' + prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
@@ -1260,7 +1288,7 @@ function updateStatus(shownStep) {
   const p = tool === 'trace' || tool === 'poly' ? snapAt(mouse) : snapAt(mouse, {pins:false});
   $('#stPos').innerHTML = `X <b>${p.x.toFixed(3)}</b> Y <b>${p.y.toFixed(3)}</b> mm` + (p.pin ? ` &nbsp;${t('pin')} <b>${esc(p.pin.ref)}.${esc(p.pin.num)}</b>` : '');
   $('#stGrid').innerHTML = `${t('grid')} <b>${fmt(D.settings.grid)} mm</b>${D.settings.snap ? '' : ' ' + t('(snap off)')}${shownStep && Math.abs(shownStep - D.settings.grid) > 1e-9 ? ' · ' + t('lines every {0} mm', fmt(shownStep)) : ''} · ${t('zoom {0} px/mm', fmt(V.s))}`;
-  const hints = {select:t('Click to select, drag to move. Drag empty area to pan.'),
+  const hints = {select:selSet.length > 1 ? t('{0} objects selected. Drag one to move them all; Ctrl/Cmd+C copies, Ctrl/Cmd+V pastes, Del deletes.', selSet.length) : t('Click to select, Ctrl/Cmd+click to add. Drag empty space to select an area. Right-drag pans.'),
     trace:draft ? t('Click to add corners; click a pin or press Enter / double-click / right-click to finish. / flips the corner. Esc cancels.') : t('Click a pin or point to start a trace ({0} mode, width {1} mm).', D.settings.angleMode === 'any' ? t('any angle') : D.settings.angleMode + '°', fmt(D.settings.traceWidth)),
     place:t('Click to place. R rotates, M mirrors. Esc or right-click stops placing.') + (placeMirror ? ' (' + t('mirrored') + ')' : ''),
     poly:draft ? t('Click to add corners; click the first corner or press Enter / double-click / right-click to close the polygon. Esc cancels.') : t('Click to start a copper polygon ({0} mode).', D.settings.angleMode === 'any' ? t('any angle') : D.settings.angleMode + '°'),
@@ -1281,7 +1309,9 @@ cv.addEventListener('mousedown', e => {
   const m = evWorld(e, cv, V); Object.assign(mouse, m, {in:true});
   if (e.button === 1 || (e.button === 0 && spaceDown)) { drag = {type:'pan', sx:m.sx, sy:m.sy, vx:V.x, vy:V.y}; e.preventDefault(); return; }
   if (e.button === 2) {
-    if ((tool === 'trace' || tool === 'poly') && draft) finishTrace(); else if (tool !== 'select') setTool('select');
+    if ((tool === 'trace' || tool === 'poly') && draft) finishTrace();
+    else if (tool !== 'select') setTool('select');
+    else drag = {type:'pan', sx:m.sx, sy:m.sy, vx:V.x, vy:V.y};
     return;
   }
   if (e.button !== 0) return;
@@ -1289,7 +1319,7 @@ cv.addEventListener('mousedown', e => {
     const lib = libById(placeLib); if (!lib) return setTool('select');
     const p = snapAt(m, {pins:false}); pushUndo();
     const c = {id:uid(), lib:lib.id, ref:nextRef(lib.prefix), x:p.x, y:p.y, rot:placeRot, mirror:placeMirror};
-    D.components.push(c); sel = {kind:'comp', id:c.id}; changed(); return;
+    D.components.push(c); setSel({kind:'comp', id:c.id}); changed(); return;
   }
   if (tool === 'trace') {
     const p = snapAt(m);
@@ -1314,12 +1344,12 @@ cv.addEventListener('mousedown', e => {
     openTextEditor(snapAt(m, {pins:false}));
     return;
   }
-  // select
-  const h = hitTest(m); sel = h;
-  if (h && h.kind === 'comp') { const c = findSel(); drag = {type:'comp', c, x0:c.x, y0:c.y, m0:{x:m.x, y:m.y}, ends:attachedEnds(c), snap:snapshot(), moved:false}; }
-  else if (h && (h.kind === 'trace' || h.kind === 'poly')) { const o = findSel(); drag = {type:'trace', t:o, pts0:clone(o.pts), m0:{x:m.x, y:m.y}, snap:snapshot(), moved:false}; }
-  else if (h && h.kind === 'text') { const o = findSel(); drag = {type:'text', o, x0:o.x, y0:o.y, m0:{x:m.x, y:m.y}, snap:snapshot(), moved:false}; }
-  else drag = {type:'pan', sx:m.sx, sy:m.sy, vx:V.x, vy:V.y};
+  // select: Ctrl/Cmd (or Shift) + click adds or removes; dragging a selected object moves the whole selection;
+  // dragging on empty space draws a selection rectangle
+  const h = hitTest(m), add = e.ctrlKey || e.metaKey || e.shiftKey;
+  if (h && add) { setSelection(inSel(h) ? selSet.filter(x => !(x.kind === h.kind && x.id === h.id)) : [...selSet, h]); changed(); return; }
+  if (h) { if (!inSel(h)) setSel(h); drag = groupDrag(m); }
+  else { if (!add) setSel(null); drag = {type:'band', x0:m.x, y0:m.y, sx:m.sx, sy:m.sy, add, base:selSet.slice()}; }
   changed();
 });
 window.addEventListener('mousemove', e => {
@@ -1344,14 +1374,84 @@ window.addEventListener('mousemove', e => {
     const nx = s(drag.x0 + m.x - drag.m0.x), ny = s(drag.y0 + m.y - drag.m0.y);
     if (nx !== drag.o.x || ny !== drag.o.y) drag.moved = true;
     drag.o.x = nx; drag.o.y = ny;
+  } else if (drag && drag.type === 'group') {
+    moveGroup(drag, m);
+  } else if (drag && drag.type === 'band') {
+    drag.x1 = m.x; drag.y1 = m.y;
   }
   requestRender();
 });
 window.addEventListener('mouseup', () => {
   if (fpOpen || !drag) return;
+  if (drag.type === 'band') {
+    const d = drag; drag = null;
+    if (d.x1 !== undefined && Math.hypot((d.x1 - d.x0) * V.s, (d.y1 - d.y0) * V.s) > 4) {
+      const found = itemsInRect(Math.min(d.x0, d.x1), Math.min(d.y0, d.y1), Math.max(d.x0, d.x1), Math.max(d.y0, d.y1));
+      setSelection(d.add ? [...d.base, ...found.filter(x => !d.base.some(y => y.kind === x.kind && y.id === x.id))] : found);
+    }
+    changed(); return;
+  }
   if (drag.type !== 'pan' && drag.moved) { pushUndo(drag.snap); changed(); }
   drag = null;
 });
+// moving a selection: components and texts keep the grid (the first one is the anchor), traces and polygons move by the same amount;
+// traces that are not selected but end on a moved component's pin follow that pin
+function groupDrag(m) {
+  const items = selSet.map(x => ({x, o:objOf(x)})).filter(i => i.o);
+  const tracesSel = new Set(items.filter(i => i.x.kind === 'trace').map(i => i.o.id));
+  const ends = items.filter(i => i.x.kind === 'comp').flatMap(i => attachedEnds(i.o)).filter(en => !tracesSel.has(en.t.id));
+  const orig = items.map(i => ({o:i.o, x:i.o.x, y:i.o.y, pts:i.o.pts ? clone(i.o.pts) : null}));
+  const anchor = orig.find(r => !r.pts) || null;
+  return {type:'group', m0:{x:m.x, y:m.y}, orig, ends, anchor, snap:snapshot(), moved:false};
+}
+function moveGroup(d, m) {
+  const s = D.settings.snap ? snapG : r4;
+  let dx, dy;
+  if (d.anchor) { dx = r4(s(d.anchor.x + m.x - d.m0.x) - d.anchor.x); dy = r4(s(d.anchor.y + m.y - d.m0.y) - d.anchor.y); }
+  else { dx = s(m.x - d.m0.x); dy = s(m.y - d.m0.y); }
+  if (dx || dy) d.moved = true;
+  for (const r of d.orig) {
+    if (r.pts) r.o.pts = r.pts.map(p => ({x:r4(p.x + dx), y:r4(p.y + dy)}));
+    else { r.o.x = r4(r.x + dx); r.o.y = r4(r.y + dy); }
+  }
+  for (const en of d.ends) en.t.pts[en.idx] = {x:r4(en.x0 + dx), y:r4(en.y0 + dy)};
+}
+function itemsInRect(x0, y0, x1, y1) {
+  const inside = p => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1, res = [];
+  for (const c of D.components) { if (!libById(c.lib)) continue; const b = compBBox(c); if (inside({x:b.x0, y:b.y0}) && inside({x:b.x1, y:b.y1})) res.push({kind:'comp', id:c.id}); }
+  for (const t of D.traces) if (t.pts.every(inside)) res.push({kind:'trace', id:t.id});
+  for (const g of D.polys) if (g.pts.every(inside)) res.push({kind:'poly', id:g.id});
+  for (const o of D.texts) if (textCorners(o).every(inside)) res.push({kind:'text', id:o.id});
+  return res;
+}
+// clipboard (kept in memory for this page)
+let clip = null;
+function copySel() {
+  if (!selSet.length) return false;
+  const c = {comps:[], traces:[], polys:[], texts:[]};
+  let b = {x0:Infinity, y0:Infinity, x1:-Infinity, y1:-Infinity};
+  const add = p => { b.x0 = Math.min(b.x0, p.x); b.y0 = Math.min(b.y0, p.y); b.x1 = Math.max(b.x1, p.x); b.y1 = Math.max(b.y1, p.y); };
+  for (const x of selSet) {
+    const o = objOf(x); if (!o) continue;
+    if (x.kind === 'comp') { c.comps.push(clone(o)); add(o); }
+    if (x.kind === 'trace') { c.traces.push(clone(o)); o.pts.forEach(add); }
+    if (x.kind === 'poly') { c.polys.push(clone(o)); o.pts.forEach(add); }
+    if (x.kind === 'text') { c.texts.push(clone(o)); add(o); }
+  }
+  c.ref = {x:snapG((b.x0 + b.x1) / 2), y:snapG((b.y0 + b.y1) / 2)};
+  clip = c; return true;
+}
+function pasteClip() {
+  if (!clip) return;
+  const g = D.settings.grid, at = mouse.in ? snapAt(mouse, {pins:false}) : {x:clip.ref.x + 2 * g, y:clip.ref.y + 2 * g};
+  const dx = r4(at.x - clip.ref.x), dy = r4(at.y - clip.ref.y), mv = p => ({x:r4(p.x + dx), y:r4(p.y + dy)}), out = [];
+  pushUndo();
+  for (const c of clip.comps) { const lib = libById(c.lib); if (!lib) continue; const n = {...clone(c), id:uid(), ref:nextRef(lib.prefix), ...mv(c)}; D.components.push(n); out.push({kind:'comp', id:n.id}); }
+  for (const t of clip.traces) { const n = {...clone(t), id:uid(), pts:t.pts.map(mv)}; D.traces.push(n); out.push({kind:'trace', id:n.id}); }
+  for (const q of clip.polys) { const n = {...clone(q), id:uid(), pts:q.pts.map(mv)}; D.polys.push(n); out.push({kind:'poly', id:n.id}); }
+  for (const o of clip.texts) { const n = {...clone(o), id:uid(), ...mv(o)}; D.texts.push(n); out.push({kind:'text', id:n.id}); }
+  setSelection(out); changed();
+}
 // on-canvas text entry box (a browser prompt() can be blocked, so text is typed into this box instead)
 let textPending = null;
 function openTextEditor(p) {
@@ -1371,7 +1471,7 @@ function commitText(cancel = false) {
   const s = $('#textEdIn').value; $('#textEdIn').value = '';
   if (!cancel && p && s.trim()) {
     pushUndo(); const o = {id:uid(), s, x:p.x, y:p.y, h:D.settings.textHeight || 2, rot:0, mirror:true};
-    D.texts.push(o); sel = {kind:'text', id:o.id}; changed();
+    D.texts.push(o); setSel({kind:'text', id:o.id}); changed();
   }
   requestRender();
 }
@@ -1393,9 +1493,17 @@ window.addEventListener('keydown', e => {
   if (inField) return;
   if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); return e.shiftKey ? redo() : undo(); }
   if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); return redo(); }
+  if ((e.ctrlKey || e.metaKey) && k === 'c') { if (copySel()) e.preventDefault(); return; }
+  if ((e.ctrlKey || e.metaKey) && k === 'x') { if (copySel()) { e.preventDefault(); deleteSel(); } return; }
+  if ((e.ctrlKey || e.metaKey) && k === 'v') { e.preventDefault(); return pasteClip(); }
+  if ((e.ctrlKey || e.metaKey) && k === 'a') {
+    e.preventDefault(); if (tool !== 'select') setTool('select');
+    setSelection([...D.components.map(o => ({kind:'comp', id:o.id})), ...D.traces.map(o => ({kind:'trace', id:o.id})), ...D.polys.map(o => ({kind:'poly', id:o.id})), ...D.texts.map(o => ({kind:'text', id:o.id}))]);
+    return changed();
+  }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === ' ') { spaceDown = true; e.preventDefault(); return; }
-  if (e.key === 'Escape') { if (draft) { draft = null; requestRender(); } else if (tool !== 'select') setTool('select'); else { sel = null; changed(); } return; }
+  if (e.key === 'Escape') { if (draft) { draft = null; requestRender(); } else if (tool !== 'select') setTool('select'); else { setSel(null); changed(); } return; }
   if (e.key === 'Enter') { if (draft) finishTrace(); return; }
   if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); if ((tool === 'trace' || tool === 'poly') && draft) { draft.pts.pop(); if (!draft.pts.length) draft = null; requestRender(); } else deleteSel(); return; }
   if (k === 'v' || k === 's') return setTool('select');
@@ -1766,6 +1874,12 @@ const HU = {
   'rotate':'forgatás', 'delete':'törlés', 'fit':'teljes nézet',
   ', double-click or right-click finishes a trace. Clicking a pin finishes it too.':', dupla kattintás vagy jobb klikk befejezi a vezetéket. Lábra kattintás szintén befejezi.',
   'Wheel zooms. Drag empty space, middle button or':'Görgő: nagyítás. Nézet mozgatása: üres terület húzása, középső gomb vagy',
+  'Drag on empty space selects an area;':'Üres területen húzva területet jelölsz ki;', '+click adds or removes; drag a selected object to move the selection.':'+kattintás hozzáad vagy elvesz; kijelölt elemet húzva a teljes kijelölés mozog.',
+  'copy,':'másolás,', 'cut,':'kivágás,', 'paste at the mouse,':'beillesztés az egérhez,', 'select all.':'mindent kijelöl.',
+  'Wheel zooms. Right or middle button drag, or':'Görgő: nagyítás. Nézet mozgatása: jobb vagy középső gombbal húzás, vagy',
+  'Drag any selected object to move them all. Ctrl/Cmd+C copies, Ctrl/Cmd+X cuts, Ctrl/Cmd+V pastes at the mouse.':'Bármely kijelölt elemet húzva mindet mozgatod. Ctrl/Cmd+C másol, Ctrl/Cmd+X kivág, Ctrl/Cmd+V az egérhez illeszt be.',
+  '{0} objects selected. Drag one to move them all; Ctrl/Cmd+C copies, Ctrl/Cmd+V pastes, Del deletes.':'{0} elem kijelölve. Egyet húzva mind mozog; Ctrl/Cmd+C másol, Ctrl/Cmd+V beilleszt, Del töröl.',
+  'Click to select, Ctrl/Cmd+click to add. Drag empty space to select an area. Right-drag pans.':'Kattintás: kijelölés, Ctrl/Cmd+kattintás: hozzáadás. Üres területen húzva területet jelölsz ki. Jobb gombbal húzva mozgatod a nézetet.',
   '+drag pans.':'+húzás.', 'undo/redo,':'visszavonás/újra,', 'save.':'mentés.',
   'Footprint editor':'Footprint szerkesztő', 'Pad':'Forrszem', 'Termination point':'Csatlakozási pont',
   'Silk line':'Szitanyomat vonal', 'Silk circle':'Szitanyomat kör', 'Component':'Alkatrész', 'Ref prefix':'Jelölés előtag',
