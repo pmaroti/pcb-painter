@@ -160,6 +160,7 @@ aside{background:var(--panel);overflow:auto;min-height:0}
         <kbd>/</kbd> flip trace corner &nbsp; <kbd>G</kbd> snap on/off<br>
         <kbd>R</kbd> rotate &nbsp; <kbd>Del</kbd> delete &nbsp; <kbd>F</kbd> fit<br>
         <kbd>L</kbd> library &nbsp; <kbd>P</kbd> polygon &nbsp; <kbd>X</kbd> text<br>
+        <kbd>M</kbd> mirror component / text<br>
         <kbd>Enter</kbd>, double-click or right-click finishes a trace. Clicking a pin finishes it too.<br>
         Wheel zooms. Drag empty space, middle button or <kbd>Space</kbd>+drag pans.<br>
         <kbd>Ctrl+Z</kbd>/<kbd>Ctrl+Y</kbd> undo/redo, <kbd>Ctrl+S</kbd> save.
@@ -455,7 +456,7 @@ let D = newDesign();
 let V = {s:6, x:-10, y:-10};          // view: px per mm, world coord of the canvas top-left
 let tool = 'select';                  // select | place | trace | poly | text
 let sel = null;                       // {kind:'comp'|'trace', id}
-let placeLib = null, placeRot = 0;
+let placeLib = null, placeRot = 0, placeMirror = false;
 let draft = null;                     // trace or polygon being drawn: {pts:[...]}
 let routeFlip = false;
 let mouse = {x:0, y:0, sx:0, sy:0, in:false};
@@ -467,6 +468,7 @@ const normRot = r => ((Math.round(r / 90) * 90) % 360 + 360) % 360;
 function rotPt(x, y, r) {
   switch (normRot(r)) { case 90: return {x:-y, y:x}; case 180: return {x:-x, y:-y}; case 270: return {x:y, y:-x}; default: return {x, y}; }
 }
+function cPt(c, x, y) { return rotPt(c.mirror ? -x : x, y, c.rot || 0); }
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 function distSeg(p, a, b) {
   const dx = b.x - a.x, dy = b.y - a.y, L = dx * dx + dy * dy;
@@ -475,7 +477,7 @@ function distSeg(p, a, b) {
 }
 const libById = id => D.library.find(l => l.id === id);
 function padWorld(c, p) {
-  const r = c.rot || 0, q = rotPt(p.x, p.y, r), t = rotPt(p.x + (p.tx || 0), p.y + (p.ty || 0), r);
+  const r = c.rot || 0, q = cPt(c, p.x, p.y), t = cPt(c, p.x + (p.tx || 0), p.y + (p.ty || 0));
   const swap = r === 90 || r === 270;
   return {x:r4(c.x + q.x), y:r4(c.y + q.y), w:swap ? p.h : p.w, h:swap ? p.w : p.h, shape:p.shape,
     drill:+p.drill || 0, tx:r4(c.x + t.x), ty:r4(c.y + t.y), num:p.num};
@@ -492,7 +494,7 @@ function libLocalBBox(lib) {
   return b;
 }
 function compBBox(c, lib = libById(c.lib)) {
-  const b = libLocalBBox(lib), pts = [rotPt(b.x0, b.y0, c.rot), rotPt(b.x1, b.y1, c.rot)];
+  const b = libLocalBBox(lib), pts = [cPt(c, b.x0, b.y0), cPt(c, b.x1, b.y1)];
   return {x0:c.x + Math.min(pts[0].x, pts[1].x), y0:c.y + Math.min(pts[0].y, pts[1].y),
           x1:c.x + Math.max(pts[0].x, pts[1].x), y1:c.y + Math.max(pts[0].y, pts[1].y)};
 }
@@ -508,10 +510,10 @@ function padPrim(P, w, layer) {
 function silkPrims(P, lib, c) {
   for (const s of lib.silk || []) {
     if (s.t === 'line') {
-      const a = rotPt(s.x1, s.y1, c.rot), b = rotPt(s.x2, s.y2, c.rot);
+      const a = cPt(c, s.x1, s.y1), b = cPt(c, s.x2, s.y2);
       P.seg([{x:c.x + a.x, y:c.y + a.y}, {x:c.x + b.x, y:c.y + b.y}], s.w, 'silk');
     } else if (s.t === 'circle') {
-      const a = rotPt(s.x, s.y, c.rot); P.ring(c.x + a.x, c.y + a.y, s.r, s.w, 'silk');
+      const a = cPt(c, s.x, s.y); P.ring(c.x + a.x, c.y + a.y, s.r, s.w, 'silk');
     }
   }
 }
@@ -635,12 +637,12 @@ function render() {
   if (textPending) { const r = 5 / V.s; ctx.strokeStyle = PAL.sel; ctx.lineWidth = 1.5 / V.s; ctx.beginPath(); ctx.moveTo(textPending.x - r, textPending.y); ctx.lineTo(textPending.x + r, textPending.y); ctx.moveTo(textPending.x, textPending.y - r); ctx.lineTo(textPending.x, textPending.y + r); ctx.stroke(); }
   else if (tool === 'text' && mouse.in) {
     const p = snapAt(mouse, {pins:false});
-    ctx.globalAlpha = 0.5; P.ctext({x:p.x, y:p.y, s:'Text', h:D.settings.textHeight || 2, rot:0}, 'copper'); ctx.globalAlpha = 1;
+    ctx.globalAlpha = 0.5; P.ctext({x:p.x, y:p.y, s:'Text', h:D.settings.textHeight || 2, rot:0, mirror:true}, 'copper'); ctx.globalAlpha = 1;
   }
   // placement ghost
   if (tool === 'place' && placeLib && mouse.in) {
     const lib = libById(placeLib); if (lib) {
-      const p = snapAt(mouse, {pins:false}); const c = {x:p.x, y:p.y, rot:placeRot};
+      const p = snapAt(mouse, {pins:false}); const c = {x:p.x, y:p.y, rot:placeRot, mirror:placeMirror};
       ctx.globalAlpha = 0.6; copperPrims(P, lib, c); holePrims(P, lib, c); silkPrims(P, lib, c); ctx.globalAlpha = 1;
     }
   }
@@ -779,7 +781,7 @@ function validateDesign(o) {
   d.board = {w:+(o.board && o.board.w) || 0, h:+(o.board && o.board.h) || 0};
   Object.assign(d.settings, o.settings || {});
   d.library = o.library.map(normLib);
-  d.components = o.components.map(c => ({id:c.id || uid(), lib:c.lib, ref:String(c.ref || '?'), x:+c.x || 0, y:+c.y || 0, rot:normRot(+c.rot || 0)}));
+  d.components = o.components.map(c => ({id:c.id || uid(), lib:c.lib, ref:String(c.ref || '?'), x:+c.x || 0, y:+c.y || 0, rot:normRot(+c.rot || 0), mirror:!!c.mirror}));
   d.traces = o.traces.filter(t => Array.isArray(t.pts) && t.pts.length >= 2).map(t => ({id:t.id || uid(), w:+t.w || 0.5, pts:t.pts.map(p => ({x:+p.x, y:+p.y}))}));
   d.texts = (Array.isArray(o.texts) ? o.texts : []).filter(x => x && x.s).map(x => ({id:x.id || uid(), s:String(x.s), x:+x.x || 0, y:+x.y || 0, h:+x.h || 2, rot:normRot(+x.rot || 0), mirror:!!x.mirror}));
   d.polys = (Array.isArray(o.polys) ? o.polys : []).filter(g => Array.isArray(g.pts) && g.pts.length >= 3).map(g => ({id:g.id || uid(), pts:g.pts.map(p => ({x:+p.x, y:+p.y}))}));
@@ -986,7 +988,7 @@ function libPreview() {
 }
 function libPlace(id) {
   if (!libById(id)) return;
-  closeLib(); placeLib = id; placeRot = 0; tool = 'place'; draft = null; syncToolbar(); requestRender();
+  closeLib(); placeLib = id; placeRot = 0; placeMirror = false; tool = 'place'; draft = null; syncToolbar(); requestRender();
 }
 function libCopy(id) {
   const l = clone(libById(id)); l.id = uid(); l.name += ' ' + t('copy');
@@ -1060,6 +1062,7 @@ function renderProps() {
       ${add(numField('X (mm)', o.x, v => { o.x = r4(v); }))}
       ${add(numField('Y (mm)', o.y, v => { o.y = r4(v); }))}
       <div class="row"><label>Rotation</label><select id="pRot">${[0,90,180,270].map(r => `<option ${r === o.rot ? 'selected' : ''}>${r}</option>`).join('')}</select></div>
+      <label class="chk"><input type="checkbox" id="pCMir" ${o.mirror ? 'checked' : ''}> Mirrored (placed on the copper side)</label>
       <div class="row"><button id="pRotBtn">Rotate 90°</button><button id="pDel" class="danger">Delete</button></div></div>`;
   } else if (o && sel.kind === 'trace') {
     let len = 0; for (let i = 1; i < o.pts.length; i++) len += dist(o.pts[i - 1], o.pts[i]);
@@ -1107,9 +1110,11 @@ function renderProps() {
   if (q('#pText')) q('#pText').onchange = e => { const v = e.target.value; if (v.trim()) { pushUndo(); o.s = v; changed(); } };
   if (q('#pTRot')) q('#pTRot').onchange = e => { pushUndo(); o.rot = normRot(+e.target.value); changed(); };
   if (q('#pTMir')) q('#pTMir').onchange = e => { pushUndo(); o.mirror = e.target.checked; changed(); };
+  if (q('#pCMir')) q('#pCMir').onchange = e => mirrorComp(o, e.target.checked);
   if (q('#pRotBtn')) q('#pRotBtn').onclick = () => rotateComp(o, 90);
   if (q('#pDel')) q('#pDel').onclick = deleteSel;
 }
+function mirrorComp(c, on = !c.mirror) { pushUndo(); const ends = attachedEnds(c); c.mirror = on; reattach(c, ends); changed(); }
 function rotateComp(c, by) { pushUndo(); const ends = attachedEnds(c); c.rot = normRot(c.rot + by); reattach(c, ends); changed(); }
 function deleteSel() {
   if (!sel) return; pushUndo();
@@ -1129,7 +1134,7 @@ function updateStatus(shownStep) {
   $('#stGrid').innerHTML = `${t('grid')} <b>${fmt(D.settings.grid)} mm</b>${D.settings.snap ? '' : ' ' + t('(snap off)')}${shownStep && Math.abs(shownStep - D.settings.grid) > 1e-9 ? ' · ' + t('lines every {0} mm', fmt(shownStep)) : ''} · ${t('zoom {0} px/mm', fmt(V.s))}`;
   const hints = {select:t('Click to select, drag to move. Drag empty area to pan.'),
     trace:draft ? t('Click to add corners; click a pin or press Enter / double-click / right-click to finish. / flips the corner. Esc cancels.') : t('Click a pin or point to start a trace ({0} mode, width {1} mm).', D.settings.angleMode === 'any' ? t('any angle') : D.settings.angleMode + '°', fmt(D.settings.traceWidth)),
-    place:t('Click to place. R rotates. Esc or right-click stops placing.'),
+    place:t('Click to place. R rotates, M mirrors. Esc or right-click stops placing.') + (placeMirror ? ' (' + t('mirrored') + ')' : ''),
     poly:draft ? t('Click to add corners; click the first corner or press Enter / double-click / right-click to close the polygon. Esc cancels.') : t('Click to start a copper polygon ({0} mode).', D.settings.angleMode === 'any' ? t('any angle') : D.settings.angleMode + '°'),
     text:t('Click where the text should start (bottom-left corner).')};
   $('#stHint').textContent = hints[tool];
@@ -1155,7 +1160,7 @@ cv.addEventListener('mousedown', e => {
   if (tool === 'place') {
     const lib = libById(placeLib); if (!lib) return setTool('select');
     const p = snapAt(m, {pins:false}); pushUndo();
-    const c = {id:uid(), lib:lib.id, ref:nextRef(lib.prefix), x:p.x, y:p.y, rot:placeRot};
+    const c = {id:uid(), lib:lib.id, ref:nextRef(lib.prefix), x:p.x, y:p.y, rot:placeRot, mirror:placeMirror};
     D.components.push(c); sel = {kind:'comp', id:c.id}; changed(); return;
   }
   if (tool === 'trace') {
@@ -1177,6 +1182,7 @@ cv.addEventListener('mousedown', e => {
     requestRender(); return;
   }
   if (tool === 'text') {
+    e.preventDefault();   // keep focus in the text box we are about to open
     openTextEditor(snapAt(m, {pins:false}));
     return;
   }
@@ -1228,7 +1234,7 @@ function openTextEditor(p) {
   ed.classList.remove('hidden');
   ed.style.left = Math.max(4, Math.min(sx, r.width - ed.offsetWidth - 4)) + 'px';
   ed.style.top = Math.max(4, Math.min(sy + 8, r.height - ed.offsetHeight - 4)) + 'px';
-  const inp = $('#textEdIn'); inp.value = ''; setTimeout(() => inp.focus(), 0);
+  const inp = $('#textEdIn'); inp.value = ''; inp.focus();
   requestRender();
 }
 function commitText(cancel = false) {
@@ -1236,7 +1242,7 @@ function commitText(cancel = false) {
   $('#textEd').classList.add('hidden');
   const s = $('#textEdIn').value; $('#textEdIn').value = '';
   if (!cancel && p && s.trim()) {
-    pushUndo(); const o = {id:uid(), s, x:p.x, y:p.y, h:D.settings.textHeight || 2, rot:0, mirror:false};
+    pushUndo(); const o = {id:uid(), s, x:p.x, y:p.y, h:D.settings.textHeight || 2, rot:0, mirror:true};
     D.texts.push(o); sel = {kind:'text', id:o.id}; changed();
   }
   requestRender();
@@ -1273,6 +1279,12 @@ window.addEventListener('keydown', e => {
   if (k === 'g') { D.settings.snap = !D.settings.snap; syncToolbar(); return changed(); }
   if (k === 'a') { const m = ['any', '45', '90']; D.settings.angleMode = m[(m.indexOf(D.settings.angleMode) + 1) % 3]; syncToolbar(); return changed(); }
   if (e.key === '/') { routeFlip = !routeFlip; return requestRender(); }
+  if (k === 'm') {
+    if (tool === 'place') { placeMirror = !placeMirror; return requestRender(); }
+    const o = findSel(); if (o && sel.kind === 'comp') mirrorComp(o);
+    if (o && sel.kind === 'text') { pushUndo(); o.mirror = !o.mirror; changed(); }
+    return;
+  }
   if (k === 'r') {
     if (tool === 'place') { placeRot = normRot(placeRot + (e.shiftKey ? 270 : 90)); return requestRender(); }
     const o = findSel(); if (o && sel.kind === 'comp') rotateComp(o, e.shiftKey ? 270 : 90);
@@ -1693,7 +1705,9 @@ const HU = {
   'Click to add corners; click the first corner or press Enter / double-click / right-click to close the polygon. Esc cancels.':'Kattintással sarokpontot adsz hozzá; az első sarokpontra kattintás, Enter, dupla kattintás vagy jobb klikk lezárja a poligont. Az Esc megszakítja.',
   'Click to start a copper polygon ({0} mode).':'Kattints a réz poligon indításához ({0} mód).',
   'Click where the text should start (bottom-left corner).':'Kattints oda, ahol a szöveg kezdődjön (bal alsó sarok).',
-  'Text to place on the copper layer:':'A rézrétegre kerülő szöveg:', 'Enter places the text · Esc cancels':'Enter elhelyezi a szöveget · Esc mégse',
+  'Text to place on the copper layer:':'A rézrétegre kerülő szöveg:', 'Mirrored (placed on the copper side)':'Tükrözött (a rézoldalra kerül)',
+  'Click to place. R rotates, M mirrors. Esc or right-click stops placing.':'Kattints a lehelyezéshez. R forgat, M tükröz, Esc vagy jobb klikk befejezi.', 'mirrored':'tükrözve',
+  'mirror component / text':'alkatrész / szöveg tükrözése', 'Enter places the text · Esc cancels':'Enter elhelyezi a szöveget · Esc mégse',
 };
 let LANG = 'en';
 try { LANG = localStorage.getItem('pcbpainter.lang') || ((navigator.language || '').toLowerCase().startsWith('hu') ? 'hu' : 'en'); } catch (e) {}
