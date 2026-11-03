@@ -401,7 +401,69 @@ function extraTransistorLibrary() {
       silk:[...sRect(-5.2,-4.6,5.2,3.6)]},
   ];
 }
-const CATS = ['RCL', 'Diodes', 'Transistors', 'ICs', 'Connectors', 'Other'];
+const CATS = ['RCL', 'Diodes', 'Transistors', 'ICs', 'Modules', 'Connectors', 'Other'];
+const mmName = v => String(v).replace(/\.0+$/, '');
+function extraPassiveLibrary() {
+  const L = [];
+  // ceramic / film capacitors (disc) at various pitches
+  for (const pitch of [2, 2.5, 3, 3.5, 4, 5, 7.5]) {
+    const h = r4(pitch / 2), bw = r4(Math.max(h + 1.3, 2.4));
+    L.push({id:'c_disc_' + mmName(pitch).replace('.', '_'), name:`Capacitor disc ${mmName(pitch)} mm`, prefix:'C', type:'tht',
+      pads:[thtPad(1,-h,0,1.6,0.8), thtPad(2,h,0,1.6,0.8)], silk:sRect(-bw,-1.4,bw,1.4)});
+  }
+  // radial electrolytic capacitors: [pitch, diameter]
+  for (const [pitch, d] of [[1.5, 4], [2.5, 6.3], [3.5, 8], [5, 10], [5, 12.5], [7.5, 16]]) {
+    const h = r4(pitch / 2), r = d / 2;
+    L.push({id:`cp_radial_${mmName(d).replace('.', '_')}_${mmName(pitch).replace('.', '_')}`, name:`Electrolytic cap D${mmName(d)} mm, ${mmName(pitch)} mm`, prefix:'C', type:'tht',
+      pads:[thtPad(1,-h,0,pitch < 2 ? 1.3 : 1.6,0.8,'rect'), thtPad(2,h,0,pitch < 2 ? 1.3 : 1.6,0.8)],
+      silk:[{t:'circle', x:0, y:0, r:r4(r + 0.1), w:0.15}, sLine(r4(-r - 1), r4(-r * 0.6), r4(-r - 0.2), r4(-r * 0.6)), sLine(r4(-r - 0.6), r4(-r * 0.6 - 0.4), r4(-r - 0.6), r4(-r * 0.6 + 0.4))]});
+  }
+  // axial resistors at other pitches (body 6.4 x 2.4 for 1/4 W, longer for wider pitches)
+  for (const pitch of [7.62, 12.7, 15.24]) {
+    const h = r4(pitch / 2), bl = pitch >= 12 ? 4.5 : 3.2, bh = pitch >= 12 ? 1.6 : 1.2;
+    L.push({id:'r_axial_' + Math.round(pitch / 0.0254), name:`Resistor axial ${Math.round(pitch / 0.0254)} mil`, prefix:'R', type:'tht',
+      pads:[thtPad(1,-h,0), thtPad(2,h,0)], silk:[...sRect(-bl,-bh,bl,bh), sLine(r4(-h + 1.1),0,-bl,0), sLine(bl,0,r4(h - 1.1),0)]});
+  }
+  // standing (radial) resistors: body over pad 1
+  for (const pitch of [2.54, 5.08]) {
+    const h = r4(pitch / 2);
+    L.push({id:'r_stand_' + Math.round(pitch / 0.0254), name:`Resistor standing ${mmName(pitch)} mm`, prefix:'R', type:'tht',
+      pads:[thtPad(1,-h,0,1.6,0.8), thtPad(2,h,0,1.6,0.8)], silk:[{t:'circle', x:-h, y:0, r:1.35, w:0.15}, sLine(r4(-h + 1.35),0,r4(h - 0.95),0)]});
+  }
+  // diodes: axial at other pitches, standing (radial) at 2.54, 3.5 and 5.08 mm
+  for (const pitch of [7.62, 12.7]) {
+    const h = r4(pitch / 2), bl = pitch >= 12 ? 3.8 : 2.2;
+    L.push({id:'d_axial_' + Math.round(pitch / 0.0254), name:`Diode axial ${Math.round(pitch / 0.0254)} mil`, prefix:'D', type:'tht',
+      pads:[thtPad(1,-h,0,1.8,0.9,'rect'), thtPad(2,h,0)], silk:[...sRect(-bl,-1.1,bl,1.1), sLine(r4(-bl + 0.7),-1.1,r4(-bl + 0.7),1.1), sLine(r4(-bl + 0.9),-1.1,r4(-bl + 0.9),1.1)]});
+  }
+  for (const pitch of [2.54, 3.5, 5.08]) {
+    const h = r4(pitch / 2);
+    L.push({id:'d_stand_' + mmName(pitch).replace('.', '_'), name:`Diode standing ${mmName(pitch)} mm`, prefix:'D', type:'tht',
+      pads:[thtPad(1,-h,0,1.6,0.8,'rect'), thtPad(2,h,0,1.6,0.8)],
+      silk:[{t:'circle', x:-h, y:0, r:1.35, w:0.15}, sLine(r4(-h + 1.35),0,r4(h - 0.95),0), sLine(r4(-h - 0.5),-1.6,r4(-h + 0.5),-1.6)]});
+  }
+  return L;
+}
+// development boards soldered on with pin headers: two rows of pins, pin 1 top-left, counter-clockwise
+function moduleBoard(id, name, perSide, rowSpacing, boardW, boardH, usbW, extra = []) {
+  const pads = [], o = r4((perSide - 1) * 2.54 / 2), hx = r4(rowSpacing / 2);
+  for (let i = 0; i < perSide; i++) pads.push(thtPad(i + 1, -hx, r4(-o + i * 2.54), 1.7, 1.0, i === 0 ? 'rect' : 'round'));
+  for (let i = 0; i < perSide; i++) pads.push(thtPad(perSide + i + 1, hx, r4(o - i * 2.54), 1.7, 1.0));
+  const bx = boardW / 2, by = boardH / 2, u = usbW / 2;
+  return {id, name, prefix:'U', type:'tht', category:'Modules', pads:[...pads, ...extra],
+    silk:[...sRect(-bx, -by, bx, by), sLine(-u, -by, -u, r4(-by + 1.5)), sLine(-u, r4(-by + 1.5), u, r4(-by + 1.5)), sLine(u, r4(-by + 1.5), u, -by)]};
+}
+function moduleLibrary() {
+  return [
+    // Raspberry Pi Pico: 21 x 51 mm, 2 x 20 pins, rows 17.78 mm apart; SWD pads at the far end
+    moduleBoard('rpi_pico', 'Raspberry Pi Pico', 20, 17.78, 21, 51, 8,
+      [thtPad('SWCLK', -2.54, 24.13, 1.7, 1.0), thtPad('GND', 0, 24.13, 1.7, 1.0), thtPad('SWDIO', 2.54, 24.13, 1.7, 1.0)]),
+    // Waveshare RP2040-Zero: 18 x 23.5 mm, 2 x 9 pins, rows 15.24 mm apart
+    moduleBoard('rp2040_zero', 'RP2040-Zero (Waveshare)', 9, 15.24, 18, 23.5, 9),
+    // ESP32-C3 SuperMini: 18 x 22.5 mm, 2 x 8 pins, rows 15.24 mm apart
+    moduleBoard('esp32c3_supermini', 'ESP32-C3 SuperMini', 8, 15.24, 18, 22.5, 9),
+  ];
+}
 function guessCat(l) {
   const p = String(l.prefix || '').toUpperCase();
   if (/^(R|C|L|RN|FB)$/.test(p)) return 'RCL';
@@ -412,7 +474,7 @@ function guessCat(l) {
   return 'Other';
 }
 function defaultLibrary() {
-  return [...baseLibrary(), ...extraIcLibrary(), ...extraTransistorLibrary()].map(l => ({...l, category:l.category || guessCat(l)}));
+  return [...baseLibrary(), ...extraPassiveLibrary(), ...extraIcLibrary(), ...extraTransistorLibrary(), ...moduleLibrary()].map(l => ({...l, category:l.category || guessCat(l)}));
 }
 function baseLibrary() {
   return [
@@ -446,7 +508,7 @@ function baseLibrary() {
 }
 
 function newDesign() {
-  return {format:'pcb-painter', version:2, name:'Untitled board', board:{w:100, h:80},
+  return {format:'pcb-painter', version:3, name:'Untitled board', board:{w:100, h:80},
     settings:{grid:1.27, snap:true, traceWidth:0.8, angleMode:'90', textHeight:2},
     library:defaultLibrary(), components:[], traces:[], texts:[], polys:[]};
 }
@@ -785,8 +847,8 @@ function validateDesign(o) {
   d.traces = o.traces.filter(t => Array.isArray(t.pts) && t.pts.length >= 2).map(t => ({id:t.id || uid(), w:+t.w || 0.5, pts:t.pts.map(p => ({x:+p.x, y:+p.y}))}));
   d.texts = (Array.isArray(o.texts) ? o.texts : []).filter(x => x && x.s).map(x => ({id:x.id || uid(), s:String(x.s), x:+x.x || 0, y:+x.y || 0, h:+x.h || 2, rot:normRot(+x.rot || 0), mirror:!!x.mirror}));
   d.polys = (Array.isArray(o.polys) ? o.polys : []).filter(g => Array.isArray(g.pts) && g.pts.length >= 3).map(g => ({id:g.id || uid(), pts:g.pts.map(p => ({x:+p.x, y:+p.y}))}));
-  // designs from before version 2 get the footprints that were added to the built-in library since
-  if (!(+o.version >= 2)) for (const l of defaultLibrary()) if (!d.library.some(x => x.id === l.id)) d.library.push(l);
+  // designs from before version 3 get the footprints that were added to the built-in library since
+  if (!(+o.version >= 3)) for (const l of defaultLibrary()) if (!d.library.some(x => x.id === l.id)) d.library.push(l);
   return d;
 }
 function normLib(l) {
@@ -814,7 +876,7 @@ function download(name, blob) {
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 const safeName = s => (s || 'board').replace(/[^\w\-. ]+/g, '_').trim() || 'board';
-function saveDesign() { const out = {...D, format:'pcb-painter', version:2}; saveFile(safeName(D.name) + '.json', JSON.stringify(out, null, 1)); }
+function saveDesign() { const out = {...D, format:'pcb-painter', version:3}; saveFile(safeName(D.name) + '.json', JSON.stringify(out, null, 1)); }
 
 /* ---------------- toolbar ---------------- */
 function fillPresetSelect(selEl, presets) {
@@ -988,7 +1050,7 @@ function libPreview() {
 }
 function libPlace(id) {
   if (!libById(id)) return;
-  closeLib(); placeLib = id; placeRot = 0; placeMirror = false; tool = 'place'; draft = null; syncToolbar(); requestRender();
+  closeLib(); placeLib = id; placeRot = 0; placeMirror = libById(id).type === 'smd'; tool = 'place'; draft = null; syncToolbar(); requestRender();
 }
 function libCopy(id) {
   const l = clone(libById(id)); l.id = uid(); l.name += ' ' + t('copy');
@@ -1696,7 +1758,7 @@ const HU = {
   'library':'könyvtár', 'polygon':'poligon', 'text':'szöveg', 'Category':'Kategória',
   'Search components (name, package, category)…':'Alkatrész keresése (név, tokozás, kategória)…', 'Close (Esc)':'Bezárás (Esc)',
   '↑ ↓ choose · Enter selects / places · double-click places · Esc closes':'↑ ↓ választás · Enter kiválaszt / lehelyez · dupla kattintás lehelyez · Esc bezár',
-  'RCL':'RCL (passzív)', 'Diodes':'Diódák', 'Transistors':'Tranzisztorok', 'ICs':'IC-k', 'Connectors':'Csatlakozók', 'Other':'Egyéb',
+  'RCL':'RCL (passzív)', 'Modules':'Modulok', 'Diodes':'Diódák', 'Transistors':'Tranzisztorok', 'ICs':'IC-k', 'Connectors':'Csatlakozók', 'Other':'Egyéb',
   'No matching components.':'Nincs találat.', 'Select a component in the tree to see its footprint.':'Válassz egy alkatrészt a fában a footprint megtekintéséhez.',
   '{0} pads':'{0} forrszem', '{0} drilled':'{0} furatos', 'ref':'jelölés', 'Place on board':'Lehelyezés a panelen', 'Copy':'Másolás', 'copy':'másolat',
   'New footprint':'Új footprint', 'Height (mm)':'Magasság (mm)', 'Mirrored (reads correctly from the copper side)':'Tükrözött (a rézoldalról nézve olvasható)',
