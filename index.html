@@ -25,7 +25,7 @@ label{color:var(--muted)}
 .grp{display:flex;gap:4px;align-items:center}
 .sep{width:1px;height:22px;background:var(--line)}
 .brand{font-weight:700;letter-spacing:.3px;margin-right:4px}
-#main{display:grid;grid-template-columns:230px 1fr 250px;min-height:0}
+#main{display:grid;grid-template-columns:1fr 250px;min-height:0}
 aside{background:var(--panel);overflow:auto;min-height:0}
 #left{border-right:1px solid var(--line)}
 #right{border-left:1px solid var(--line)}
@@ -43,6 +43,9 @@ aside{background:var(--panel);overflow:auto;min-height:0}
 .libitem button:hover{opacity:1}
 #stage{position:relative;min-width:0;min-height:0;overflow:hidden}
 #stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+#textEd{position:absolute;z-index:3;display:flex;flex-direction:column;gap:3px;background:var(--panel);border:1px solid var(--accent);border-radius:6px;padding:6px;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+#textEd.hidden{display:none}
+#textEd input{width:220px;font-size:14px}
 #status{display:flex;gap:16px;padding:4px 10px;background:var(--panel);border-top:1px solid var(--line);color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden}
 #status b{color:var(--text);font-weight:500}
 .hint{color:var(--muted);font-size:12px;line-height:1.5}
@@ -63,7 +66,35 @@ aside{background:var(--panel);overflow:auto;min-height:0}
 .chk{display:flex;gap:8px;align-items:center;margin:6px 0;color:var(--text)}
 .warn{color:#ffcf7a}
 .muted{color:var(--muted)}
-@media (max-width:900px){#main{grid-template-columns:180px 1fr}#right{display:none}}
+@media (max-width:900px){#main{grid-template-columns:1fr}#right{display:none}}
+#fpModal{z-index:20}
+#libDlg{width:min(1000px,96vw);height:min(700px,92vh);display:grid;grid-template-rows:auto 1fr auto}
+#libDlg header{padding:12px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center}
+#libDlg footer{padding:8px 12px;border-top:1px solid var(--line);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.searchwrap{position:relative;flex:1}
+#libSearch{width:100%;font-size:15px;padding:8px 10px}
+#libSuggest{position:absolute;left:0;right:0;top:100%;margin-top:2px;background:#14161a;border:1px solid var(--line);border-radius:5px;z-index:5;max-height:320px;overflow:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+#libSuggest.hidden{display:none}
+.sug{padding:6px 10px;cursor:pointer;display:flex;gap:8px;align-items:center}
+.sug .cat{margin-left:auto;color:var(--muted);font-size:11px}
+.sug.on,.sug:hover{background:#1d3340}
+#libBody{display:grid;grid-template-columns:minmax(220px,38%) 1fr;min-height:0}
+#libTree{overflow:auto;border-right:1px solid var(--line);padding:6px 4px}
+.tn{padding:3px 6px;border-radius:4px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none}
+.tn:hover{background:var(--panel2)}
+.tn.cat{font-weight:600}
+.tn.typ{padding-left:22px;color:#cfd3da}
+.tn.item{padding-left:44px}
+.tn.item.on{background:#1d3340;outline:1px solid var(--accent)}
+.tn .cnt{color:var(--muted);font-weight:400;font-size:11px}
+.tn .arr{display:inline-block;width:14px;color:var(--muted)}
+#libRight{display:grid;grid-template-rows:1fr auto;min-height:0}
+#libPrevWrap{position:relative;min-height:0;background:var(--board,#103a29)}
+#pcv{position:absolute;inset:0;width:100%;height:100%}
+#libInfo{padding:10px 12px;border-top:1px solid var(--line)}
+#libInfo h4{margin:0 0 6px;font-size:15px}
+#libInfo .meta{color:var(--muted);margin-bottom:8px}
+#libInfo .acts{display:flex;gap:6px;flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -77,9 +108,13 @@ aside{background:var(--panel);overflow:auto;min-height:0}
       <button id="bPdf" class="primary" title="Export 1:1 PDF for A4">Export PDF</button>
     </div>
     <div class="sep"></div>
+    <div class="grp"><button id="bLib" title="Open the component library (L)">Library</button></div>
+    <div class="sep"></div>
     <div class="grp">
       <button id="tSelect" title="Select / move (V)">Select</button>
       <button id="tTrace" title="Draw trace (T)">Trace</button>
+      <button id="tPoly" title="Draw copper polygon (P)">Polygon</button>
+      <button id="tText" title="Place copper text (X)">Text</button>
     </div>
     <div class="grp" title="Trace angle mode (A cycles, / flips corner)">
       <label>Angle</label>
@@ -114,21 +149,9 @@ aside{background:var(--panel);overflow:auto;min-height:0}
   </div>
 
   <div id="main">
-    <aside id="left">
-      <div class="sec">
-        <h3>Component library</h3>
-        <div class="row" style="justify-content:flex-start;flex-wrap:wrap">
-          <button id="bNewFp">+ New footprint</button>
-        </div>
-        <div class="row" style="justify-content:flex-start">
-          <button id="bLibImport" title="Merge footprints from a library or design JSON">Import</button>
-          <button id="bLibExport" title="Save the library as JSON">Export</button>
-        </div>
-      </div>
-      <div class="sec" id="libList"></div>
-      <div class="sec hint">Click a footprint, then click on the board to place it. <kbd>R</kbd> rotates, <kbd>Esc</kbd> stops placing.</div>
-    </aside>
-    <div id="stage"><canvas id="cv"></canvas></div>
+    <div id="stage"><canvas id="cv"></canvas>
+      <div id="textEd" class="hidden"><input id="textEdIn" type="text" autocomplete="off" spellcheck="false" placeholder="Text to place on the copper layer:"><span class="hint">Enter places the text · Esc cancels</span></div>
+    </div>
     <aside id="right">
       <div id="props"></div>
       <div class="sec hint">
@@ -136,6 +159,8 @@ aside{background:var(--panel);overflow:auto;min-height:0}
         <kbd>V</kbd> select &nbsp; <kbd>T</kbd> trace &nbsp; <kbd>A</kbd> angle mode<br>
         <kbd>/</kbd> flip trace corner &nbsp; <kbd>G</kbd> snap on/off<br>
         <kbd>R</kbd> rotate &nbsp; <kbd>Del</kbd> delete &nbsp; <kbd>F</kbd> fit<br>
+        <kbd>L</kbd> library &nbsp; <kbd>P</kbd> polygon &nbsp; <kbd>X</kbd> text<br>
+        <kbd>M</kbd> mirror component / text<br>
         <kbd>Enter</kbd>, double-click or right-click finishes a trace. Clicking a pin finishes it too.<br>
         Wheel zooms. Drag empty space, middle button or <kbd>Space</kbd>+drag pans.<br>
         <kbd>Ctrl+Z</kbd>/<kbd>Ctrl+Y</kbd> undo/redo, <kbd>Ctrl+S</kbd> save.
@@ -143,6 +168,32 @@ aside{background:var(--panel);overflow:auto;min-height:0}
     </aside>
   </div>
   <div id="status"><span id="stPos"></span><span id="stGrid"></span><span id="stHint"></span></div>
+</div>
+
+<!-- Component library overlay -->
+<div id="libModal" class="modal hidden">
+  <div id="libDlg" class="dlg">
+    <header>
+      <div class="searchwrap">
+        <input id="libSearch" type="text" autocomplete="off" spellcheck="false" placeholder="Search components (name, package, category)…">
+        <div id="libSuggest" class="hidden"></div>
+      </div>
+      <button id="libClose" title="Close (Esc)">✕</button>
+    </header>
+    <div id="libBody">
+      <div id="libTree"></div>
+      <div id="libRight">
+        <div id="libPrevWrap"><canvas id="pcv"></canvas></div>
+        <div id="libInfo"></div>
+      </div>
+    </div>
+    <footer>
+      <button id="bNewFp">+ New footprint</button>
+      <button id="bLibImport" title="Merge footprints from a library or design JSON">Import</button>
+      <button id="bLibExport" title="Save the library as JSON">Export</button>
+      <span class="hint" style="margin-left:auto">↑ ↓ choose · Enter selects / places · double-click places · Esc closes</span>
+    </footer>
+  </div>
 </div>
 
 <!-- Footprint editor -->
@@ -172,6 +223,8 @@ aside{background:var(--panel);overflow:auto;min-height:0}
           <h3>Component</h3>
           <div class="row"><label>Name</label><input id="fName" type="text"></div>
           <div class="row"><label>Ref prefix</label><input id="fPrefix" type="text" style="width:60px"></div>
+          <div class="row"><label>Category</label><input id="fCat" type="text" list="catList"></div>
+          <datalist id="catList"></datalist>
           <div class="row"><label>Mounting</label>
             <select id="fType"><option value="tht">Through-hole</option><option value="smd">SMD</option></select></div>
         </div>
@@ -250,21 +303,180 @@ function header(n) {
   for (let i = 0; i < n; i++) pads.push(thtPad(i + 1, 0, r4(-o + i * 2.54), 1.7, 1.0, i === 0 ? 'rect' : 'round'));
   return {id:'hdr_1x' + n, name:'Pin header 1x' + n + ' 2.54 mm', prefix:'J', type:'tht', pads, silk:sRect(-1.4, -o - 1.4, 1.4, o + 1.4)};
 }
-function dip(n) {
-  const pads = [], half = n / 2, o = (half - 1) * 2.54 / 2;
-  for (let i = 0; i < half; i++) pads.push(thtPad(i + 1, -3.81, r4(-o + i * 2.54), 2.2, 0.8, i === 0 ? 'rect' : 'oblong', 1.6));
-  for (let i = 0; i < half; i++) pads.push(thtPad(half + i + 1, 3.81, r4(o - i * 2.54), 2.2, 0.8, 'oblong', 1.6));
-  const y = o + 1.6;
-  return {id:'dip' + n, name:'DIP-' + n + ' 300 mil', prefix:'U', type:'tht', pads,
-    silk:[sLine(-2.5,-y,-0.6,-y), sLine(0.6,-y,2.5,-y), sLine(2.5,-y,2.5,y), sLine(2.5,y,-2.5,y), sLine(-2.5,y,-2.5,-y), sLine(-0.6,-y,0,-y+0.7), sLine(0,-y+0.7,0.6,-y)]};
+function dip(n, row = 7.62) {
+  const pads = [], half = n / 2, o = (half - 1) * 2.54 / 2, hx = row / 2;
+  for (let i = 0; i < half; i++) pads.push(thtPad(i + 1, -hx, r4(-o + i * 2.54), 2.2, 0.8, i === 0 ? 'rect' : 'oblong', 1.6));
+  for (let i = 0; i < half; i++) pads.push(thtPad(half + i + 1, hx, r4(o - i * 2.54), 2.2, 0.8, 'oblong', 1.6));
+  const y = o + 1.6, bx = r4(hx - 1.31);
+  return {id:'dip' + n + (row > 8 ? '_600' : ''), name:'DIP-' + n + (row > 8 ? ' 600 mil' : ' 300 mil'), prefix:'U', type:'tht', pads,
+    silk:[sLine(-bx,-y,-0.6,-y), sLine(0.6,-y,bx,-y), sLine(bx,-y,bx,y), sLine(bx,y,-bx,y), sLine(-bx,y,-bx,-y), sLine(-0.6,-y,0,-y+0.7), sLine(0,-y+0.7,0.6,-y)]};
 }
-function soic8() {
-  const pads = [];
-  for (let i = 0; i < 4; i++) pads.push(smdPad(i + 1, -2.7, r4(-1.905 + i * 1.27), 1.55, 0.6));
-  for (let i = 0; i < 4; i++) pads.push(smdPad(5 + i, 2.7, r4(1.905 - i * 1.27), 1.55, 0.6));
-  return {id:'soic8', name:'SOIC-8', prefix:'U', type:'smd', pads, silk:[...sRect(-1.6,-2.5,1.6,2.5), {t:'circle', x:-0.9, y:-1.8, r:0.25, w:0.15}]};
+// dual-row SMD package: n pins, pitch, pad-centre x, pad size, body half-width
+function soN(id, name, n, pitch, px, pw, ph, bx) {
+  const pads = [], half = n / 2, o = r4((half - 1) * pitch / 2);
+  for (let i = 0; i < half; i++) pads.push(smdPad(i + 1, -px, r4(-o + i * pitch), pw, ph));
+  for (let i = 0; i < half; i++) pads.push(smdPad(half + i + 1, px, r4(o - i * pitch), pw, ph));
+  const by = r4(o + pitch / 2 + 0.3);
+  return {id, name, prefix:'U', type:'smd', pads, silk:[...sRect(-bx, -by, bx, by), {t:'circle', x:r4(-bx + 0.6), y:r4(-by + 0.6), r:0.25, w:0.15}]};
+}
+// quad flat package; ep = exposed pad size (QFN), 0 for none
+function quad(id, name, perSide, pitch, span, pl, pw, body, ep = 0) {
+  const pads = [], o = r4((perSide - 1) * pitch / 2); let k = 1;
+  for (let i = 0; i < perSide; i++) pads.push(smdPad(k++, -span, r4(-o + i * pitch), pl, pw));
+  for (let i = 0; i < perSide; i++) pads.push(smdPad(k++, r4(-o + i * pitch), span, pw, pl));
+  for (let i = 0; i < perSide; i++) pads.push(smdPad(k++, span, r4(o - i * pitch), pl, pw));
+  for (let i = 0; i < perSide; i++) pads.push(smdPad(k++, r4(o - i * pitch), -span, pw, pl));
+  if (ep) pads.push(smdPad(k, 0, 0, ep, ep));
+  const b = body / 2, c = Math.min(1, b / 4);
+  return {id, name, prefix:'U', type:'smd', pads, silk:[
+    sLine(-b, -b + c, -b, -b), sLine(-b, -b, -b + c, -b), sLine(b - c, -b, b, -b), sLine(b, -b, b, -b + c),
+    sLine(b, b - c, b, b), sLine(b, b, b - c, b), sLine(-b + c, b, -b, b), sLine(-b, b, -b, b - c),
+    {t:'circle', x:r4(-b - 0.7), y:r4(-b - 0.7), r:0.25, w:0.15}]};
+}
+function extraIcLibrary() {
+  return [
+    dip(16), dip(18), dip(20), dip(24), dip(28), dip(24, 15.24), dip(28, 15.24), dip(40, 15.24),
+    soN('soic14', 'SOIC-14', 14, 1.27, 2.7, 1.55, 0.6, 1.95),
+    soN('soic16', 'SOIC-16', 16, 1.27, 2.7, 1.55, 0.6, 1.95),
+    soN('soic16w', 'SOIC-16W (wide)', 16, 1.27, 4.65, 2.0, 0.6, 3.75),
+    soN('soic20w', 'SOIC-20W (wide)', 20, 1.27, 4.65, 2.0, 0.6, 3.75),
+    soN('soic28w', 'SOIC-28W (wide)', 28, 1.27, 4.65, 2.0, 0.6, 3.75),
+    soN('msop8', 'MSOP-8', 8, 0.65, 2.2, 1.4, 0.4, 1.5),
+    soN('tssop8', 'TSSOP-8', 8, 0.65, 2.85, 1.5, 0.4, 2.2),
+    soN('tssop14', 'TSSOP-14', 14, 0.65, 2.85, 1.5, 0.4, 2.2),
+    soN('tssop16', 'TSSOP-16', 16, 0.65, 2.85, 1.5, 0.4, 2.2),
+    soN('tssop20', 'TSSOP-20', 20, 0.65, 2.85, 1.5, 0.4, 2.2),
+    quad('tqfp32', 'TQFP-32 7x7 mm 0.8', 8, 0.8, 4.2, 1.5, 0.55, 7),
+    quad('tqfp44', 'TQFP-44 10x10 mm 0.8', 11, 0.8, 5.7, 1.5, 0.55, 10),
+    quad('tqfp48', 'TQFP-48 7x7 mm 0.5', 12, 0.5, 4.2, 1.5, 0.3, 7),
+    quad('tqfp64', 'TQFP-64 10x10 mm 0.5', 16, 0.5, 5.7, 1.5, 0.3, 10),
+    quad('lqfp100', 'LQFP-100 14x14 mm 0.5', 25, 0.5, 7.7, 1.5, 0.3, 14),
+    quad('qfn16', 'QFN-16 3x3 mm 0.5', 4, 0.5, 1.45, 0.85, 0.25, 3, 1.7),
+    quad('qfn20', 'QFN-20 4x4 mm 0.5', 5, 0.5, 1.95, 0.85, 0.25, 4, 2.6),
+    quad('qfn32', 'QFN-32 5x5 mm 0.5', 8, 0.5, 2.45, 0.85, 0.25, 5, 3.45),
+    {id:'sot23_5', name:'SOT-23-5', prefix:'U', type:'smd',
+      pads:[smdPad(1,-0.95,1.15,0.6,1.1), smdPad(2,0,1.15,0.6,1.1), smdPad(3,0.95,1.15,0.6,1.1), smdPad(4,0.95,-1.15,0.6,1.1), smdPad(5,-0.95,-1.15,0.6,1.1)],
+      silk:[sLine(-1.5,-0.45,-1.5,0.45), sLine(1.5,-0.45,1.5,0.45), {t:'circle', x:-1.6, y:1.6, r:0.2, w:0.15}]},
+    {id:'sot23_6', name:'SOT-23-6', prefix:'U', type:'smd',
+      pads:[smdPad(1,-0.95,1.15,0.6,1.1), smdPad(2,0,1.15,0.6,1.1), smdPad(3,0.95,1.15,0.6,1.1), smdPad(4,0.95,-1.15,0.6,1.1), smdPad(5,0,-1.15,0.6,1.1), smdPad(6,-0.95,-1.15,0.6,1.1)],
+      silk:[sLine(-1.5,-0.45,-1.5,0.45), sLine(1.5,-0.45,1.5,0.45), {t:'circle', x:-1.6, y:1.6, r:0.2, w:0.15}]},
+  ];
+}
+function extraTransistorLibrary() {
+  const T = 'tht';
+  return [
+    {id:'to92_127', name:'TO-92 (narrow 1.27 mm)', prefix:'Q', type:T,
+      pads:[thtPad(1,-1.27,0,1.05,0.65,'rect',1.5), thtPad(2,0,0,1.05,0.65,'oblong',1.5), thtPad(3,1.27,0,1.05,0.65,'oblong',1.5)],
+      silk:[sLine(-2.4,1.6,2.4,1.6), sLine(-2.4,1.6,-2.6,-0.6), sLine(2.4,1.6,2.6,-0.6), sLine(-2.6,-0.6,-1.5,-2.2), sLine(-1.5,-2.2,0,-2.6), sLine(0,-2.6,1.5,-2.2), sLine(1.5,-2.2,2.6,-0.6)]},
+    {id:'to18', name:'TO-18 / TO-5 metal can', prefix:'Q', type:T,
+      pads:[thtPad(1,-1.27,0,1.3,0.75,'rect'), thtPad(2,0,-1.27,1.3,0.75), thtPad(3,1.27,0,1.3,0.75)],
+      silk:[{t:'circle', x:0, y:0, r:2.9, w:0.15}, sLine(-2.2,2.0,-2.8,2.6), sLine(-2.0,2.2,-2.6,2.8)]},
+    {id:'to126', name:'TO-126 vertical', prefix:'Q', type:T,
+      pads:[thtPad(1,-2.28,0,1.8,1.1,'rect',2.2), thtPad(2,0,0,1.8,1.1,'oblong',2.2), thtPad(3,2.28,0,1.8,1.1,'oblong',2.2)],
+      silk:[...sRect(-4.0,-1.8,4.0,1.4)]},
+    {id:'to220v', name:'TO-220 vertical', prefix:'Q', type:T,
+      pads:[thtPad(1,-2.54,0,1.9,1.1,'rect',2.6), thtPad(2,0,0,1.9,1.1,'oblong',2.6), thtPad(3,2.54,0,1.9,1.1,'oblong',2.6)],
+      silk:[...sRect(-5.2,-3.2,5.2,1.6), sLine(-5.2,-1.9,5.2,-1.9), sLine(-1.6,-3.2,-1.6,-1.9), sLine(1.6,-3.2,1.6,-1.9)]},
+    {id:'to220h', name:'TO-220 horizontal (lying)', prefix:'Q', type:T,
+      pads:[thtPad(1,-2.54,0,1.9,1.1,'rect',2.6), thtPad(2,0,0,1.9,1.1,'oblong',2.6), thtPad(3,2.54,0,1.9,1.1,'oblong',2.6),
+        thtPad('MH',0,-16.1,6.0,3.5)],
+      silk:[...sRect(-5.2,-19.4,5.2,-3.6), sLine(-5.2,-13.1,5.2,-13.1)]},
+    {id:'to247', name:'TO-247 vertical', prefix:'Q', type:T,
+      pads:[thtPad(1,-5.45,0,2.6,1.5,'rect',3.2), thtPad(2,0,0,2.6,1.5,'oblong',3.2), thtPad(3,5.45,0,2.6,1.5,'oblong',3.2)],
+      silk:[...sRect(-8.1,-3.6,8.1,1.8), sLine(-8.1,-2.2,8.1,-2.2)]},
+    {id:'sot323', name:'SOT-323 (SC-70)', prefix:'Q', type:'smd',
+      pads:[smdPad(1,-0.65,0.95,0.6,0.7), smdPad(2,0.65,0.95,0.6,0.7), smdPad(3,0,-0.95,0.6,0.7)],
+      silk:[sLine(-1.1,-0.4,-0.5,-0.4), sLine(0.5,-0.4,1.1,-0.4), sLine(-1.1,-0.4,-1.1,0.3), sLine(1.1,-0.4,1.1,0.3)]},
+    {id:'sot89', name:'SOT-89', prefix:'Q', type:'smd',
+      pads:[smdPad(1,-1.5,1.85,0.9,1.4), smdPad(2,0,1.85,0.9,1.4), smdPad(3,1.5,1.85,0.9,1.4), smdPad(2,0,-0.6,1.8,2.6)],
+      silk:[...sRect(-2.3,-1.3,2.3,1.0)]},
+    {id:'sot223', name:'SOT-223', prefix:'Q', type:'smd',
+      pads:[smdPad(1,-2.3,3.15,0.95,2.0), smdPad(2,0,3.15,0.95,2.0), smdPad(3,2.3,3.15,0.95,2.0), smdPad(4,0,-3.15,3.25,2.0)],
+      silk:[...sRect(-3.4,-1.85,3.4,1.85)]},
+    {id:'dpak', name:'DPAK (TO-252)', prefix:'Q', type:'smd',
+      pads:[smdPad(1,-2.28,4.3,1.0,2.2), smdPad(3,2.28,4.3,1.0,2.2), smdPad(2,0,-1.9,5.8,6.2)],
+      silk:[...sRect(-3.4,-3.4,3.4,2.9)]},
+    {id:'d2pak', name:'D2PAK (TO-263)', prefix:'Q', type:'smd',
+      pads:[smdPad(1,-2.54,5.4,1.1,3.0), smdPad(3,2.54,5.4,1.1,3.0), smdPad(2,0,-2.6,10.8,9.4)],
+      silk:[...sRect(-5.2,-4.6,5.2,3.6)]},
+  ];
+}
+const CATS = ['RCL', 'Diodes', 'Transistors', 'ICs', 'Modules', 'Connectors', 'Other'];
+const mmName = v => String(v).replace(/\.0+$/, '');
+function extraPassiveLibrary() {
+  const L = [];
+  // ceramic / film capacitors (disc) at various pitches
+  for (const pitch of [2, 2.5, 3, 3.5, 4, 5, 7.5]) {
+    const h = r4(pitch / 2), bw = r4(Math.max(h + 1.3, 2.4));
+    L.push({id:'c_disc_' + mmName(pitch).replace('.', '_'), name:`Capacitor disc ${mmName(pitch)} mm`, prefix:'C', type:'tht',
+      pads:[thtPad(1,-h,0,1.6,0.8), thtPad(2,h,0,1.6,0.8)], silk:sRect(-bw,-1.4,bw,1.4)});
+  }
+  // radial electrolytic capacitors: [pitch, diameter]
+  for (const [pitch, d] of [[1.5, 4], [2.5, 6.3], [3.5, 8], [5, 10], [5, 12.5], [7.5, 16]]) {
+    const h = r4(pitch / 2), r = d / 2;
+    L.push({id:`cp_radial_${mmName(d).replace('.', '_')}_${mmName(pitch).replace('.', '_')}`, name:`Electrolytic cap D${mmName(d)} mm, ${mmName(pitch)} mm`, prefix:'C', type:'tht',
+      pads:[thtPad(1,-h,0,pitch < 2 ? 1.3 : 1.6,0.8,'rect'), thtPad(2,h,0,pitch < 2 ? 1.3 : 1.6,0.8)],
+      silk:[{t:'circle', x:0, y:0, r:r4(r + 0.1), w:0.15}, sLine(r4(-r - 1), r4(-r * 0.6), r4(-r - 0.2), r4(-r * 0.6)), sLine(r4(-r - 0.6), r4(-r * 0.6 - 0.4), r4(-r - 0.6), r4(-r * 0.6 + 0.4))]});
+  }
+  // axial resistors at other pitches (body 6.4 x 2.4 for 1/4 W, longer for wider pitches)
+  for (const pitch of [7.62, 12.7, 15.24]) {
+    const h = r4(pitch / 2), bl = pitch >= 12 ? 4.5 : 3.2, bh = pitch >= 12 ? 1.6 : 1.2;
+    L.push({id:'r_axial_' + Math.round(pitch / 0.0254), name:`Resistor axial ${Math.round(pitch / 0.0254)} mil`, prefix:'R', type:'tht',
+      pads:[thtPad(1,-h,0), thtPad(2,h,0)], silk:[...sRect(-bl,-bh,bl,bh), sLine(r4(-h + 1.1),0,-bl,0), sLine(bl,0,r4(h - 1.1),0)]});
+  }
+  // standing (radial) resistors: body over pad 1
+  for (const pitch of [2.54, 5.08]) {
+    const h = r4(pitch / 2);
+    L.push({id:'r_stand_' + Math.round(pitch / 0.0254), name:`Resistor standing ${mmName(pitch)} mm`, prefix:'R', type:'tht',
+      pads:[thtPad(1,-h,0,1.6,0.8), thtPad(2,h,0,1.6,0.8)], silk:[{t:'circle', x:-h, y:0, r:1.35, w:0.15}, sLine(r4(-h + 1.35),0,r4(h - 0.95),0)]});
+  }
+  // diodes: axial at other pitches, standing (radial) at 2.54, 3.5 and 5.08 mm
+  for (const pitch of [7.62, 12.7]) {
+    const h = r4(pitch / 2), bl = pitch >= 12 ? 3.8 : 2.2;
+    L.push({id:'d_axial_' + Math.round(pitch / 0.0254), name:`Diode axial ${Math.round(pitch / 0.0254)} mil`, prefix:'D', type:'tht',
+      pads:[thtPad(1,-h,0,1.8,0.9,'rect'), thtPad(2,h,0)], silk:[...sRect(-bl,-1.1,bl,1.1), sLine(r4(-bl + 0.7),-1.1,r4(-bl + 0.7),1.1), sLine(r4(-bl + 0.9),-1.1,r4(-bl + 0.9),1.1)]});
+  }
+  for (const pitch of [2.54, 3.5, 5.08]) {
+    const h = r4(pitch / 2);
+    L.push({id:'d_stand_' + mmName(pitch).replace('.', '_'), name:`Diode standing ${mmName(pitch)} mm`, prefix:'D', type:'tht',
+      pads:[thtPad(1,-h,0,1.6,0.8,'rect'), thtPad(2,h,0,1.6,0.8)],
+      silk:[{t:'circle', x:-h, y:0, r:1.35, w:0.15}, sLine(r4(-h + 1.35),0,r4(h - 0.95),0), sLine(r4(-h - 0.5),-1.6,r4(-h + 0.5),-1.6)]});
+  }
+  return L;
+}
+// development boards soldered on with pin headers: two rows of pins, pin 1 top-left, counter-clockwise
+function moduleBoard(id, name, perSide, rowSpacing, boardW, boardH, usbW, extra = []) {
+  const pads = [], o = r4((perSide - 1) * 2.54 / 2), hx = r4(rowSpacing / 2);
+  for (let i = 0; i < perSide; i++) pads.push(thtPad(i + 1, -hx, r4(-o + i * 2.54), 1.7, 1.0, i === 0 ? 'rect' : 'round'));
+  for (let i = 0; i < perSide; i++) pads.push(thtPad(perSide + i + 1, hx, r4(o - i * 2.54), 1.7, 1.0));
+  const bx = boardW / 2, by = boardH / 2, u = usbW / 2;
+  return {id, name, prefix:'U', type:'tht', category:'Modules', pads:[...pads, ...extra],
+    silk:[...sRect(-bx, -by, bx, by), sLine(-u, -by, -u, r4(-by + 1.5)), sLine(-u, r4(-by + 1.5), u, r4(-by + 1.5)), sLine(u, r4(-by + 1.5), u, -by)]};
+}
+function moduleLibrary() {
+  return [
+    // Raspberry Pi Pico: 21 x 51 mm, 2 x 20 pins, rows 17.78 mm apart; SWD pads at the far end
+    moduleBoard('rpi_pico', 'Raspberry Pi Pico', 20, 17.78, 21, 51, 8,
+      [thtPad('SWCLK', -2.54, 24.13, 1.7, 1.0), thtPad('GND', 0, 24.13, 1.7, 1.0), thtPad('SWDIO', 2.54, 24.13, 1.7, 1.0)]),
+    // Waveshare RP2040-Zero: 18 x 23.5 mm, 2 x 9 pins, rows 15.24 mm apart
+    moduleBoard('rp2040_zero', 'RP2040-Zero (Waveshare)', 9, 15.24, 18, 23.5, 9),
+    // ESP32-C3 SuperMini: 18 x 22.5 mm, 2 x 8 pins, rows 15.24 mm apart
+    moduleBoard('esp32c3_supermini', 'ESP32-C3 SuperMini', 8, 15.24, 18, 22.5, 9),
+  ];
+}
+function guessCat(l) {
+  const p = String(l.prefix || '').toUpperCase();
+  if (/^(R|C|L|RN|FB)$/.test(p)) return 'RCL';
+  if (p === 'D' || p === 'LED') return 'Diodes';
+  if (p === 'Q' || p === 'T') return 'Transistors';
+  if (p === 'U' || p === 'IC') return 'ICs';
+  if (p === 'J' || p === 'P' || p === 'X' || p === 'CN') return 'Connectors';
+  return 'Other';
 }
 function defaultLibrary() {
+  return [...baseLibrary(), ...extraPassiveLibrary(), ...extraIcLibrary(), ...extraTransistorLibrary(), ...moduleLibrary()].map(l => ({...l, category:l.category || guessCat(l)}));
+}
+function baseLibrary() {
   return [
     {id:'r_axial_400', name:'Resistor axial 400 mil', prefix:'R', type:'tht',
       pads:[thtPad(1,-5.08,0), thtPad(2,5.08,0)],
@@ -291,23 +503,23 @@ function defaultLibrary() {
     {id:'sot23', name:'SOT-23', prefix:'Q', type:'smd',
       pads:[smdPad(1,-0.95,1.1,0.8,0.9), smdPad(2,0.95,1.1,0.8,0.9), smdPad(3,0,-1.1,0.8,0.9)],
       silk:[sLine(-1.5,-0.5,-0.6,-0.5), sLine(0.6,-0.5,1.5,-0.5), sLine(-1.5,-0.5,-1.5,0.2), sLine(1.5,-0.5,1.5,0.2)]},
-    soic8(),
+    soN('soic8', 'SOIC-8', 8, 1.27, 2.7, 1.55, 0.6, 1.95),
   ];
 }
 
 function newDesign() {
-  return {format:'pcb-painter', version:1, name:'Untitled board', board:{w:100, h:80},
-    settings:{grid:1.27, snap:true, traceWidth:0.8, angleMode:'90'},
-    library:defaultLibrary(), components:[], traces:[]};
+  return {format:'pcb-painter', version:3, name:'Untitled board', board:{w:100, h:80},
+    settings:{grid:1.27, snap:true, traceWidth:0.8, angleMode:'90', textHeight:2},
+    library:defaultLibrary(), components:[], traces:[], texts:[], polys:[]};
 }
 
 /* ---------------- state ---------------- */
 let D = newDesign();
 let V = {s:6, x:-10, y:-10};          // view: px per mm, world coord of the canvas top-left
-let tool = 'select';                  // select | place | trace
+let tool = 'select';                  // select | place | trace | poly | text
 let sel = null;                       // {kind:'comp'|'trace', id}
-let placeLib = null, placeRot = 0;
-let draft = null;                     // trace being drawn: {pts:[...]}
+let placeLib = null, placeRot = 0, placeMirror = false;
+let draft = null;                     // trace or polygon being drawn: {pts:[...]}
 let routeFlip = false;
 let mouse = {x:0, y:0, sx:0, sy:0, in:false};
 let drag = null, spaceDown = false;
@@ -318,6 +530,7 @@ const normRot = r => ((Math.round(r / 90) * 90) % 360 + 360) % 360;
 function rotPt(x, y, r) {
   switch (normRot(r)) { case 90: return {x:-y, y:x}; case 180: return {x:-x, y:-y}; case 270: return {x:y, y:-x}; default: return {x, y}; }
 }
+function cPt(c, x, y) { return rotPt(c.mirror ? -x : x, y, c.rot || 0); }
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 function distSeg(p, a, b) {
   const dx = b.x - a.x, dy = b.y - a.y, L = dx * dx + dy * dy;
@@ -326,7 +539,7 @@ function distSeg(p, a, b) {
 }
 const libById = id => D.library.find(l => l.id === id);
 function padWorld(c, p) {
-  const r = c.rot || 0, q = rotPt(p.x, p.y, r), t = rotPt(p.x + (p.tx || 0), p.y + (p.ty || 0), r);
+  const r = c.rot || 0, q = cPt(c, p.x, p.y), t = cPt(c, p.x + (p.tx || 0), p.y + (p.ty || 0));
   const swap = r === 90 || r === 270;
   return {x:r4(c.x + q.x), y:r4(c.y + q.y), w:swap ? p.h : p.w, h:swap ? p.w : p.h, shape:p.shape,
     drill:+p.drill || 0, tx:r4(c.x + t.x), ty:r4(c.y + t.y), num:p.num};
@@ -343,7 +556,7 @@ function libLocalBBox(lib) {
   return b;
 }
 function compBBox(c, lib = libById(c.lib)) {
-  const b = libLocalBBox(lib), pts = [rotPt(b.x0, b.y0, c.rot), rotPt(b.x1, b.y1, c.rot)];
+  const b = libLocalBBox(lib), pts = [cPt(c, b.x0, b.y0), cPt(c, b.x1, b.y1)];
   return {x0:c.x + Math.min(pts[0].x, pts[1].x), y0:c.y + Math.min(pts[0].y, pts[1].y),
           x1:c.x + Math.max(pts[0].x, pts[1].x), y1:c.y + Math.max(pts[0].y, pts[1].y)};
 }
@@ -359,10 +572,10 @@ function padPrim(P, w, layer) {
 function silkPrims(P, lib, c) {
   for (const s of lib.silk || []) {
     if (s.t === 'line') {
-      const a = rotPt(s.x1, s.y1, c.rot), b = rotPt(s.x2, s.y2, c.rot);
+      const a = cPt(c, s.x1, s.y1), b = cPt(c, s.x2, s.y2);
       P.seg([{x:c.x + a.x, y:c.y + a.y}, {x:c.x + b.x, y:c.y + b.y}], s.w, 'silk');
     } else if (s.t === 'circle') {
-      const a = rotPt(s.x, s.y, c.rot); P.ring(c.x + a.x, c.y + a.y, s.r, s.w, 'silk');
+      const a = cPt(c, s.x, s.y); P.ring(c.x + a.x, c.y + a.y, s.r, s.w, 'silk');
     }
   }
 }
@@ -383,9 +596,38 @@ function canvasPainter(ctx, colors = PAL) {
     ring(x, y, r, w, l) { ctx.strokeStyle = colors[l]; ctx.lineWidth = w; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke(); },
     rect(x, y, w, h, l) { ctx.fillStyle = colors[l]; ctx.fillRect(x - w / 2, y - h / 2, w, h); },
     text(s, x, y, size, l) { ctx.fillStyle = colors[l]; ctx.font = `${size}px Arial,sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(s, x, y); },
+    poly(pts, l) { if (pts.length < 3) return; ctx.fillStyle = colors[l]; ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (const q of pts) ctx.lineTo(q.x, q.y); ctx.closePath(); ctx.fill(); },
+    // copper text: left/baseline anchored, bold Arial (metric-compatible with Helvetica-Bold used in the PDF)
+    ctext(o, l) {
+      ctx.save(); ctx.translate(o.x, o.y); ctx.rotate((o.rot || 0) * Math.PI / 180); if (o.mirror) ctx.scale(-1, 1);
+      ctx.fillStyle = colors[l]; ctx.font = `bold ${o.h}px Arial,Helvetica,sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(o.s, 0, 0); ctx.restore();
+    },
   };
   return P;
 }
+const measureCtx = document.createElement('canvas').getContext('2d');
+function textWidth(o) { measureCtx.font = 'bold 100px Arial,Helvetica,sans-serif'; return measureCtx.measureText(o.s).width / 100 * o.h; }
+// text corners in world coordinates (local box: x 0..w, y -0.75h..0.22h)
+function textCorners(o) {
+  const w = textWidth(o), a = (o.rot || 0) * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a), m = o.mirror ? -1 : 1;
+  return [[0, -0.75 * o.h], [w, -0.75 * o.h], [w, 0.22 * o.h], [0, 0.22 * o.h]].map(([x, y]) => ({x:o.x + c * m * x - sn * y, y:o.y + sn * m * x + c * y}));
+}
+function textHit(o, p, tol = 0) {
+  const a = -(o.rot || 0) * Math.PI / 180, dx = p.x - o.x, dy = p.y - o.y;
+  let lx = Math.cos(a) * dx - Math.sin(a) * dy; const ly = Math.sin(a) * dx + Math.cos(a) * dy;
+  if (o.mirror) lx = -lx;
+  return lx >= -tol && lx <= textWidth(o) + tol && ly >= -0.75 * o.h - tol && ly <= 0.22 * o.h + tol;
+}
+function inPoly(p, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const a = pts[i], b = pts[j];
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+function polyArea(pts) { let s = 0; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) s += (pts[j].x + pts[i].x) * (pts[j].y - pts[i].y); return Math.abs(s / 2); }
 
 /* ---------------- canvas / view ---------------- */
 const cv = $('#cv'), ctx = cv.getContext('2d');
@@ -427,15 +669,17 @@ function render() {
   worldTf(ctx, V);
   if (D.board.w > 0 && D.board.h > 0) { ctx.strokeStyle = PAL.boardEdge; ctx.lineWidth = 1.5 / V.s; ctx.strokeRect(0, 0, D.board.w, D.board.h); }
 
+  for (const g of D.polys) P.poly(g.pts, 'copper');
   for (const t of D.traces) tracePrims(P, t);
   for (const c of D.components) { const lib = libById(c.lib); if (lib) copperPrims(P, lib, c); }
+  for (const o of D.texts) P.ctext(o, 'copper');
   for (const c of D.components) { const lib = libById(c.lib); if (lib) holePrims(P, lib, c); }
   for (const c of D.components) {
     const lib = libById(c.lib); if (!lib) continue;
     silkPrims(P, lib, c); const rp = refPos(c, lib); P.text(c.ref, rp.x, rp.y, 1.3, 'silk');
   }
   // termination points while routing
-  if (tool === 'trace') {
+  if (tool === 'trace' || tool === 'poly') {
     for (const c of D.components) { const lib = libById(c.lib); if (!lib) continue;
       for (const p of lib.pads) { const w = padWorld(c, p); P.circle(w.tx, w.ty, Math.max(0.12, 2 / V.s), 'term'); } }
   }
@@ -445,21 +689,35 @@ function render() {
     if (sel.kind === 'comp') { const c = D.components.find(c => c.id === sel.id); if (c) {
       const b = compBBox(c); ctx.strokeStyle = PAL.sel; ctx.lineWidth = 1.5 / V.s; ctx.setLineDash([5 / V.s, 4 / V.s]);
       ctx.strokeRect(b.x0 - 0.4, b.y0 - 0.4, b.x1 - b.x0 + 0.8, b.y1 - b.y0 + 0.8); ctx.setLineDash([]); } }
+    if (sel.kind === 'text' || sel.kind === 'poly') { const o = findSel(); if (o) {
+      const pts = sel.kind === 'text' ? textCorners(o) : o.pts;
+      if (sel.kind === 'poly') { ctx.globalAlpha = 0.35; P.poly(pts, 'sel'); ctx.globalAlpha = 1; }
+      ctx.strokeStyle = PAL.sel; ctx.lineWidth = 1.5 / V.s; ctx.setLineDash([5 / V.s, 4 / V.s]);
+      ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]); } }
+  }
+  // text ghost
+  if (textPending) { const r = 5 / V.s; ctx.strokeStyle = PAL.sel; ctx.lineWidth = 1.5 / V.s; ctx.beginPath(); ctx.moveTo(textPending.x - r, textPending.y); ctx.lineTo(textPending.x + r, textPending.y); ctx.moveTo(textPending.x, textPending.y - r); ctx.lineTo(textPending.x, textPending.y + r); ctx.stroke(); }
+  else if (tool === 'text' && mouse.in) {
+    const p = snapAt(mouse, {pins:false});
+    ctx.globalAlpha = 0.5; P.ctext({x:p.x, y:p.y, s:'Text', h:D.settings.textHeight || 2, rot:0, mirror:true}, 'copper'); ctx.globalAlpha = 1;
   }
   // placement ghost
   if (tool === 'place' && placeLib && mouse.in) {
     const lib = libById(placeLib); if (lib) {
-      const p = snapAt(mouse, {pins:false}); const c = {x:p.x, y:p.y, rot:placeRot};
+      const p = snapAt(mouse, {pins:false}); const c = {x:p.x, y:p.y, rot:placeRot, mirror:placeMirror};
       ctx.globalAlpha = 0.6; copperPrims(P, lib, c); holePrims(P, lib, c); silkPrims(P, lib, c); ctx.globalAlpha = 1;
     }
   }
   // trace draft
-  if (tool === 'trace' && mouse.in) {
+  if ((tool === 'trace' || tool === 'poly') && mouse.in) {
     const p = snapAt(mouse);
     if (draft) {
       const last = draft.pts[draft.pts.length - 1];
       const pts = [...draft.pts, ...route(last, p, D.settings.angleMode, routeFlip)];
-      ctx.globalAlpha = 0.75; P.seg(pts, D.settings.traceWidth, 'copper'); ctx.globalAlpha = 1;
+      ctx.globalAlpha = tool === 'poly' ? 0.45 : 0.75;
+      if (tool === 'poly') P.poly(pts, 'copper'); else P.seg(pts, D.settings.traceWidth, 'copper');
+      ctx.globalAlpha = 1;
+      if (tool === 'poly') pts.push(pts[0]);
       ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1 / V.s; ctx.beginPath();
       ctx.moveTo(pts[0].x, pts[0].y); for (const q of pts) ctx.lineTo(q.x, q.y); ctx.stroke();
     }
@@ -512,9 +770,19 @@ function cleanPts(pts) {
   return out;
 }
 function finishTrace() {
+  if (draft && tool === 'poly') return finishPoly();
   if (draft) {
     const pts = cleanPts(draft.pts);
     if (pts.length >= 2) { pushUndo(); const t = {id:uid(), w:D.settings.traceWidth, pts}; D.traces.push(t); changed(); }
+  }
+  draft = null; requestRender();
+}
+function finishPoly() {
+  if (draft) {
+    let pts = cleanPts(draft.pts);
+    if (pts.length > 1 && dist(pts[0], pts[pts.length - 1]) < 1e-6) pts.pop();
+    pts = cleanPts([...pts, pts[0]]).slice(0, -1);
+    if (pts.length >= 3 && polyArea(pts) > 1e-6) { pushUndo(); const g = {id:uid(), pts}; D.polys.push(g); sel = {kind:'poly', id:g.id}; changed(); }
   }
   draft = null; requestRender();
 }
@@ -526,6 +794,7 @@ function hitTest(wp) {
     const c = D.components[i], lib = libById(c.lib); if (!lib) continue;
     for (const p of lib.pads) { const w = padWorld(c, p); if (Math.abs(wp.x - w.x) <= w.w / 2 + tol && Math.abs(wp.y - w.y) <= w.h / 2 + tol) return {kind:'comp', id:c.id}; }
   }
+  for (let i = D.texts.length - 1; i >= 0; i--) if (textHit(D.texts[i], wp, tol)) return {kind:'text', id:D.texts[i].id};
   for (let i = D.traces.length - 1; i >= 0; i--) {
     const t = D.traces[i];
     for (let k = 0; k + 1 < t.pts.length; k++) if (distSeg(wp, t.pts[k], t.pts[k + 1]) <= t.w / 2 + tol) return {kind:'trace', id:t.id};
@@ -534,6 +803,7 @@ function hitTest(wp) {
     const b = compBBox(D.components[i]);
     if (wp.x >= b.x0 - tol && wp.x <= b.x1 + tol && wp.y >= b.y0 - tol && wp.y <= b.y1 + tol) return {kind:'comp', id:D.components[i].id};
   }
+  for (let i = D.polys.length - 1; i >= 0; i--) if (inPoly(wp, D.polys[i].pts)) return {kind:'poly', id:D.polys[i].id};
   return null;
 }
 // trace endpoints sitting on this component's termination points
@@ -552,12 +822,13 @@ function reattach(c, ends) {
 }
 
 /* ---------------- undo / persistence ---------------- */
-const snapshot = () => JSON.stringify({library:D.library, components:D.components, traces:D.traces, board:D.board, name:D.name});
+const snapshot = () => JSON.stringify({library:D.library, components:D.components, traces:D.traces, texts:D.texts, polys:D.polys, board:D.board, name:D.name});
 function pushUndo(s = snapshot()) { undoStack.push(s); if (undoStack.length > 300) undoStack.shift(); redoStack.length = 0; }
 function restore(s) { Object.assign(D, JSON.parse(s)); if (sel && !findSel()) sel = null; changed(true); }
 function undo() { if (!undoStack.length) return; redoStack.push(snapshot()); restore(undoStack.pop()); }
 function redo() { if (!redoStack.length) return; undoStack.push(snapshot()); restore(redoStack.pop()); }
-function findSel() { return sel && (sel.kind === 'comp' ? D.components.find(c => c.id === sel.id) : D.traces.find(t => t.id === sel.id)); }
+const SEL_LIST = {comp:'components', trace:'traces', text:'texts', poly:'polys'};
+function findSel() { return sel && (D[SEL_LIST[sel.kind]] || []).find(o => o.id === sel.id); }
 let saveTimer = 0;
 function changed(libToo = false) {
   requestRender(); renderProps(); if (libToo) renderLib();
@@ -572,12 +843,17 @@ function validateDesign(o) {
   d.board = {w:+(o.board && o.board.w) || 0, h:+(o.board && o.board.h) || 0};
   Object.assign(d.settings, o.settings || {});
   d.library = o.library.map(normLib);
-  d.components = o.components.map(c => ({id:c.id || uid(), lib:c.lib, ref:String(c.ref || '?'), x:+c.x || 0, y:+c.y || 0, rot:normRot(+c.rot || 0)}));
+  d.components = o.components.map(c => ({id:c.id || uid(), lib:c.lib, ref:String(c.ref || '?'), x:+c.x || 0, y:+c.y || 0, rot:normRot(+c.rot || 0), mirror:!!c.mirror}));
   d.traces = o.traces.filter(t => Array.isArray(t.pts) && t.pts.length >= 2).map(t => ({id:t.id || uid(), w:+t.w || 0.5, pts:t.pts.map(p => ({x:+p.x, y:+p.y}))}));
+  d.texts = (Array.isArray(o.texts) ? o.texts : []).filter(x => x && x.s).map(x => ({id:x.id || uid(), s:String(x.s), x:+x.x || 0, y:+x.y || 0, h:+x.h || 2, rot:normRot(+x.rot || 0), mirror:!!x.mirror}));
+  d.polys = (Array.isArray(o.polys) ? o.polys : []).filter(g => Array.isArray(g.pts) && g.pts.length >= 3).map(g => ({id:g.id || uid(), pts:g.pts.map(p => ({x:+p.x, y:+p.y}))}));
+  // designs from before version 3 get the footprints that were added to the built-in library since
+  if (!(+o.version >= 3)) for (const l of defaultLibrary()) if (!d.library.some(x => x.id === l.id)) d.library.push(l);
   return d;
 }
 function normLib(l) {
   return {id:l.id || uid(), name:String(l.name || 'Footprint'), prefix:String(l.prefix || 'U'), type:l.type === 'smd' ? 'smd' : 'tht',
+    category:String(l.category || guessCat(l)),
     pads:(l.pads || []).map(p => ({num:String(p.num), x:+p.x || 0, y:+p.y || 0, shape:['round','rect','oblong'].includes(p.shape) ? p.shape : 'round',
       w:+p.w || 1, h:+p.h || +p.w || 1, drill:+p.drill || 0, tx:+p.tx || 0, ty:+p.ty || 0})),
     silk:(l.silk || []).filter(s => s.t === 'line' || s.t === 'circle')};
@@ -600,7 +876,7 @@ function download(name, blob) {
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 const safeName = s => (s || 'board').replace(/[^\w\-. ]+/g, '_').trim() || 'board';
-function saveDesign() { const out = {format:'pcb-painter', version:1, ...D}; out.format = 'pcb-painter'; saveFile(safeName(D.name) + '.json', JSON.stringify(out, null, 1)); }
+function saveDesign() { const out = {...D, format:'pcb-painter', version:3}; saveFile(safeName(D.name) + '.json', JSON.stringify(out, null, 1)); }
 
 /* ---------------- toolbar ---------------- */
 function fillPresetSelect(selEl, presets) {
@@ -615,7 +891,8 @@ function syncToolbar() {
   $('#snapChk').checked = s.snap;
   $$('[data-angle]').forEach(b => b.classList.toggle('on', b.dataset.angle === s.angleMode));
   $('#tSelect').classList.toggle('on', tool === 'select'); $('#tTrace').classList.toggle('on', tool === 'trace');
-  $$('.libitem').forEach(el => el.classList.toggle('on', tool === 'place' && el.dataset.id === placeLib));
+  $('#tPoly').classList.toggle('on', tool === 'poly'); $('#tText').classList.toggle('on', tool === 'text');
+  $('#bLib').classList.toggle('on', tool === 'place');
 }
 function setGrid(v) { v = +v; if (!(v > 0)) return; D.settings.grid = r4(v); syncToolbar(); changed(); }
 function setWidth(v) {
@@ -630,12 +907,16 @@ $('#wNum').onchange = e => setWidth(e.target.value);
 $('#snapChk').onchange = e => { D.settings.snap = e.target.checked; changed(); };
 $$('[data-angle]').forEach(b => b.onclick = () => { D.settings.angleMode = b.dataset.angle; syncToolbar(); changed(); });
 function setTool(t) {
-  if (t !== 'trace') draft = null;
+  if (textPending) commitText(t !== 'text');
+  if (t !== tool) draft = null;
   if (t !== 'place') placeLib = null;
   tool = t; syncToolbar(); requestRender();
 }
 $('#tSelect').onclick = () => setTool('select');
 $('#tTrace').onclick = () => setTool('trace');
+$('#tPoly').onclick = () => setTool('poly');
+$('#tText').onclick = () => setTool('text');
+$('#bLib').onclick = () => openLib();
 $('#bUndo').onclick = undo; $('#bRedo').onclick = redo; $('#bFit').onclick = () => fitView();
 $('#bNew').onclick = () => { if (confirm(t('Start a new design? Unsaved changes will be lost. (Your footprint library is kept.)'))) { const lib = D.library; const d = newDesign(); d.library = lib; loadDesign(d); } };
 $('#bOpen').onclick = () => $('#fileIn').click();
@@ -668,6 +949,8 @@ function contentBounds() {
   const add = (x0, y0, x1, y1) => { b.x0 = Math.min(b.x0, x0); b.y0 = Math.min(b.y0, y0); b.x1 = Math.max(b.x1, x1); b.y1 = Math.max(b.y1, y1); };
   for (const c of D.components) { if (!libById(c.lib)) continue; const k = compBBox(c); add(k.x0, k.y0 - 2, k.x1, k.y1); }
   for (const t of D.traces) for (const p of t.pts) add(p.x - t.w / 2, p.y - t.w / 2, p.x + t.w / 2, p.y + t.w / 2);
+  for (const g of D.polys) for (const p of g.pts) add(p.x, p.y, p.x, p.y);
+  for (const o of D.texts) for (const p of textCorners(o)) add(p.x, p.y, p.x, p.y);
   return isFinite(b.x0) ? b : null;
 }
 function designBounds() {
@@ -675,29 +958,156 @@ function designBounds() {
   return contentBounds() || {x0:0, y0:0, x1:100, y1:80};
 }
 
-/* ---------------- side panels ---------------- */
-function renderLib() {
-  const el = $('#libList');
-  el.innerHTML = D.library.map(l => `<div class="libitem" data-id="${esc(l.id)}" title="Click to place">
-    <span class="badge ${l.type}">${l.type.toUpperCase()}</span><span class="nm">${esc(l.name)}</span>
-    <button data-act="edit" title="Edit footprint">Edit</button><button data-act="dup" title="Duplicate">⧉</button><button data-act="del" class="danger" title="Delete">✕</button></div>`).join('')
-    || '<div class="hint">Library is empty. Create a footprint.</div>';
-  el.querySelectorAll('.libitem').forEach(item => {
-    item.onclick = e => {
-      const id = item.dataset.id, act = e.target.dataset && e.target.dataset.act;
-      if (act === 'edit') return openFpEditor(libById(id));
-      if (act === 'dup') { const l = clone(libById(id)); l.id = uid(); l.name += ' copy'; pushUndo(); D.library.push(l); changed(true); return openFpEditor(l); }
-      if (act === 'del') {
-        const used = D.components.filter(c => c.lib === id).length;
-        if (!confirm(used ? t('This footprint is used by {0} placed component(s). Delete it and those components?', used) : t('Delete this footprint?'))) return;
-        pushUndo(); D.library = D.library.filter(l => l.id !== id); D.components = D.components.filter(c => c.lib !== id);
-        if (placeLib === id) setTool('select'); sel = null; changed(true); return;
-      }
-      placeLib = id; placeRot = 0; tool = 'place'; draft = null; syncToolbar(); requestRender();
-    };
-  });
-  syncToolbar();
+/* ---------------- component library overlay ---------------- */
+const pcv = $('#pcv'), pctx = pcv.getContext('2d'), PV = {s:10, x:0, y:0};
+let libOpen = false, libSelId = null, sugIdx = -1, sugList = [];
+const libOpenNodes = new Set();
+new ResizeObserver(() => { if (libOpen) { resizeCanvas(pcv); libPreview(); } }).observe($('#libPrevWrap'));
+function categories() {
+  const set = new Set(D.library.map(l => l.category || 'Other'));
+  return [...CATS.filter(c => set.has(c)), ...[...set].filter(c => !CATS.includes(c)).sort((a, b) => a.localeCompare(b))];
 }
+// search: every word must appear in name / category / mounting / prefix; names starting with the query rank first
+function libMatches(q) {
+  q = q.trim().toLowerCase(); if (!q) return D.library.slice();
+  const words = q.split(/\s+/), res = [];
+  for (const l of D.library) {
+    const name = l.name.toLowerCase(), hay = [name, (l.category || '').toLowerCase(), tr(l.category || '').toLowerCase(), l.type, l.prefix.toLowerCase()].join(' ');
+    if (!words.every(w => hay.includes(w))) continue;
+    const score = name.startsWith(q) ? 0 : name.split(/[\s\-()]+/).some(w => w.startsWith(words[0])) ? 1 : 2;
+    res.push({l, score});
+  }
+  return res.sort((a, b) => a.score - b.score || a.l.name.localeCompare(b.l.name, undefined, {numeric:true})).map(r => r.l);
+}
+function openLib() {
+  if (fpOpen) return;
+  libOpen = true; $('#libModal').classList.remove('hidden');
+  const inp = $('#libSearch'); inp.value = '';
+  if (!libById(libSelId)) libSelId = (libById(placeLib) || D.library[0] || {}).id || null;
+  revealInTree(libSelId); hideSuggest(); renderLib();
+  requestAnimationFrame(() => { resizeCanvas(pcv); libPreview(); inp.focus(); });
+}
+function closeLib() { libOpen = false; $('#libModal').classList.add('hidden'); hideSuggest(); }
+function revealInTree(id) { const l = libById(id); if (l) { libOpenNodes.add(l.category || 'Other'); libOpenNodes.add((l.category || 'Other') + '|' + l.type); } }
+function renderLib() {
+  if (!libOpen) return;
+  const q = $('#libSearch').value.trim(), list = libMatches(q), searching = !!q;
+  const tree = $('#libTree'); let html = '';
+  const cats = categories().filter(c => list.some(l => (l.category || 'Other') === c));
+  for (const c of cats) {
+    const inCat = list.filter(l => (l.category || 'Other') === c), open = searching || libOpenNodes.has(c);
+    html += `<div class="tn cat" data-node="${esc(c)}"><span class="arr">${open ? '▾' : '▸'}</span>${esc(tr(c))} <span class="cnt">(${inCat.length})</span></div>`;
+    if (!open) continue;
+    for (const typ of ['smd', 'tht']) {
+      const items = inCat.filter(l => l.type === typ); if (!items.length) continue;
+      const key = c + '|' + typ, open2 = searching || libOpenNodes.has(key);
+      html += `<div class="tn typ" data-node="${esc(key)}"><span class="arr">${open2 ? '▾' : '▸'}</span>${typ.toUpperCase()} <span class="cnt">(${items.length})</span></div>`;
+      if (open2) for (const l of items.sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric:true})))
+        html += `<div class="tn item${l.id === libSelId ? ' on' : ''}" data-id="${esc(l.id)}" title="${esc(l.name)}">${esc(l.name)}</div>`;
+    }
+  }
+  tree.innerHTML = html || `<div class="hint" style="padding:8px">${esc(t(D.library.length ? 'No matching components.' : 'Library is empty. Create a footprint.'))}</div>`;
+  const on = tree.querySelector('.item.on'); if (on) on.scrollIntoView({block:'nearest'});
+  libInfo();
+}
+$('#libTree').addEventListener('click', e => {
+  const n = e.target.closest('.tn'); if (!n) return;
+  if (n.dataset.node) { const k = n.dataset.node; libOpenNodes.has(k) ? libOpenNodes.delete(k) : libOpenNodes.add(k); return renderLib(); }
+  if (n.dataset.id) { libSelId = n.dataset.id; renderLib(); libPreview(); }
+});
+$('#libTree').addEventListener('dblclick', e => { const n = e.target.closest('.tn.item'); if (n) libPlace(n.dataset.id); });
+function libInfo() {
+  const el = $('#libInfo'), l = libById(libSelId);
+  if (!l) { el.innerHTML = `<div class="hint">${esc(t('Select a component in the tree to see its footprint.'))}</div>`; return; }
+  const b = libLocalBBox(l), holes = l.pads.filter(p => p.drill > 0).length;
+  el.innerHTML = `<h4>${esc(l.name)}</h4>
+    <div class="meta">${esc(tr(l.category || 'Other'))} · ${l.type.toUpperCase()} · ${esc(t('{0} pads', l.pads.length))}${holes ? ' · ' + esc(t('{0} drilled', holes)) : ''} · ${fmt(b.x1 - b.x0)} × ${fmt(b.y1 - b.y0)} mm · ${esc(t('ref'))} ${esc(l.prefix)}</div>
+    <div class="acts"><button class="primary" data-act="place">Place on board</button><button data-act="edit">Edit</button><button data-act="copy">Copy</button><button data-act="del" class="danger">Delete</button></div>`;
+  el.querySelectorAll('[data-act]').forEach(btn => btn.onclick = () => {
+    const a = btn.dataset.act;
+    if (a === 'place') libPlace(l.id); else if (a === 'edit') openFpEditor(l); else if (a === 'copy') libCopy(l.id); else libDelete(l.id);
+  });
+}
+function libPreview() {
+  if (!libOpen) return;
+  const W = pcv.width / dpr, H = pcv.height / dpr, c = pctx;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0); c.fillStyle = PAL.board; c.fillRect(0, 0, W, H);
+  const l = libById(libSelId); if (!l || W < 10) return;
+  const b = libLocalBBox(l), m = 0.15, bw = Math.max(b.x1 - b.x0, 2), bh = Math.max(b.y1 - b.y0, 2);
+  PV.s = Math.min(W * (1 - 2 * m) / bw, H * (1 - 2 * m) / bh, 60);
+  PV.x = (b.x0 + b.x1) / 2 - W / 2 / PV.s; PV.y = (b.y0 + b.y1) / 2 - H / 2 / PV.s;
+  const g = PV.s * 1.27 >= 7 ? 1.27 : PV.s * 2.54 >= 7 ? 2.54 : 5.08;
+  drawGrid(pcv, c, PV, g, W, H, false);
+  worldTf(c, PV);
+  const P = canvasPainter(c), comp = {x:0, y:0, rot:0};
+  copperPrims(P, l, comp); holePrims(P, l, comp); silkPrims(P, l, comp);
+  for (const p of l.pads) {
+    const sz = Math.min(p.w, p.h) * 0.45;
+    if (sz * PV.s > 7) { c.fillStyle = '#fff'; c.font = `bold ${sz}px Arial`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(p.num, p.x, p.y); }
+  }
+  c.strokeStyle = '#ffd54f'; c.lineWidth = 1.5 / PV.s; const o = 8 / PV.s;
+  c.beginPath(); c.moveTo(-o, 0); c.lineTo(o, 0); c.moveTo(0, -o); c.lineTo(0, o); c.stroke();
+}
+function libPlace(id) {
+  if (!libById(id)) return;
+  closeLib(); placeLib = id; placeRot = 0; placeMirror = libById(id).type === 'smd'; tool = 'place'; draft = null; syncToolbar(); requestRender();
+}
+function libCopy(id) {
+  const l = clone(libById(id)); l.id = uid(); l.name += ' ' + t('copy');
+  pushUndo(); D.library.push(l); libSelId = l.id; revealInTree(l.id); changed(true); libPreview(); openFpEditor(l);
+}
+function libDelete(id) {
+  const used = D.components.filter(c => c.lib === id).length;
+  if (!confirm(used ? t('This footprint is used by {0} placed component(s). Delete it and those components?', used) : t('Delete this footprint?'))) return;
+  const list = libMatches($('#libSearch').value), i = list.findIndex(l => l.id === id);
+  pushUndo(); D.library = D.library.filter(l => l.id !== id); D.components = D.components.filter(c => c.lib !== id);
+  if (placeLib === id) setTool('select'); if (sel && sel.kind === 'comp' && !findSel()) sel = null;
+  const next = list[i + 1] || list[i - 1]; libSelId = next ? next.id : null;
+  changed(true); libPreview();
+}
+// autocomplete
+function hideSuggest() { $('#libSuggest').classList.add('hidden'); sugList = []; sugIdx = -1; }
+function showSuggest() {
+  const q = $('#libSearch').value.trim(); if (!q) return hideSuggest();
+  sugList = libMatches(q).slice(0, 10); if (!sugList.length) return hideSuggest();
+  if (sugIdx >= sugList.length) sugIdx = sugList.length - 1;
+  const el = $('#libSuggest');
+  el.innerHTML = sugList.map((l, i) => `<div class="sug${i === sugIdx ? ' on' : ''}" data-i="${i}"><span class="badge ${l.type}">${l.type.toUpperCase()}</span>${esc(l.name)}<span class="cat">${esc(tr(l.category || 'Other'))}</span></div>`).join('');
+  el.classList.remove('hidden');
+}
+function pickSuggest(i) {
+  const l = sugList[i]; if (!l) return;
+  libSelId = l.id; revealInTree(l.id); $('#libSearch').value = l.name; hideSuggest(); renderLib(); libPreview();
+}
+$('#libSearch').addEventListener('input', () => {
+  sugIdx = 0; showSuggest(); const first = libMatches($('#libSearch').value)[0];
+  if (first) libSelId = first.id;
+  renderLib(); libPreview();
+});
+$('#libSearch').addEventListener('keydown', e => {
+  const open = !$('#libSuggest').classList.contains('hidden');
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (!open) { showSuggest(); if (!sugList.length) { // no query: move through the visible tree items
+      const ids = $$('#libTree .tn.item').map(n => n.dataset.id), k = ids.indexOf(libSelId);
+      const nk = Math.max(0, Math.min(ids.length - 1, k + (e.key === 'ArrowDown' ? 1 : -1))); if (ids[nk]) { libSelId = ids[nk]; renderLib(); libPreview(); }
+      return; } }
+    sugIdx = (sugIdx + (e.key === 'ArrowDown' ? 1 : -1) + sugList.length) % sugList.length; showSuggest();
+    const l = sugList[sugIdx]; if (l) { libSelId = l.id; renderLib(); libPreview(); }
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (open && sugIdx >= 0) pickSuggest(sugIdx); else if (libSelId) libPlace(libSelId);
+  } else if (e.key === 'Escape') {
+    e.preventDefault(); e.stopPropagation();
+    if (open) hideSuggest(); else closeLib();
+  }
+});
+$('#libSuggest').addEventListener('mousedown', e => { const n = e.target.closest('.sug'); if (n) { e.preventDefault(); pickSuggest(+n.dataset.i); } });
+$('#libSearch').addEventListener('blur', () => setTimeout(hideSuggest, 150));
+$('#libClose').onclick = closeLib;
+$('#libModal').addEventListener('mousedown', e => { if (e.target.id === 'libModal') closeLib(); });
+
+/* ---------------- side panel ---------------- */
 function numField(label, val, on, step = 0.05) {
   return {html:`<div class="row"><label>${label}</label><input type="number" step="${step}" value="${fmt(val)}" data-f="${uid()}"></div>`, on};
 }
@@ -714,6 +1124,7 @@ function renderProps() {
       ${add(numField('X (mm)', o.x, v => { o.x = r4(v); }))}
       ${add(numField('Y (mm)', o.y, v => { o.y = r4(v); }))}
       <div class="row"><label>Rotation</label><select id="pRot">${[0,90,180,270].map(r => `<option ${r === o.rot ? 'selected' : ''}>${r}</option>`).join('')}</select></div>
+      <label class="chk"><input type="checkbox" id="pCMir" ${o.mirror ? 'checked' : ''}> Mirrored (placed on the copper side)</label>
       <div class="row"><button id="pRotBtn">Rotate 90°</button><button id="pDel" class="danger">Delete</button></div></div>`;
   } else if (o && sel.kind === 'trace') {
     let len = 0; for (let i = 1; i < o.pts.length; i++) len += dist(o.pts[i - 1], o.pts[i]);
@@ -722,6 +1133,21 @@ function renderProps() {
       <div class="row"><label>Segments</label><span>${o.pts.length - 1}</span></div>
       <div class="row"><label>Length</label><span>${fmt(len)} mm</span></div>
       <div class="row"><button id="pDel" class="danger">Delete trace</button></div></div>`;
+  } else if (o && sel.kind === 'text') {
+    html = `<div class="sec"><h3>Text</h3>
+      <div class="row"><label>Text</label><input type="text" id="pText" value="${esc(o.s)}"></div>
+      ${add(numField('Height (mm)', o.h, v => { if (v > 0) { o.h = r4(v); D.settings.textHeight = o.h; } }, 0.1))}
+      ${add(numField('X (mm)', o.x, v => { o.x = r4(v); }))}
+      ${add(numField('Y (mm)', o.y, v => { o.y = r4(v); }))}
+      <div class="row"><label>Rotation</label><select id="pTRot">${[0,90,180,270].map(r => `<option ${r === o.rot ? 'selected' : ''}>${r}</option>`).join('')}</select></div>
+      <label class="chk"><input type="checkbox" id="pTMir" ${o.mirror ? 'checked' : ''}> Mirrored (reads correctly from the copper side)</label>
+      <div class="row"><button id="pDel" class="danger">Delete</button></div></div>`;
+  } else if (o && sel.kind === 'poly') {
+    html = `<div class="sec"><h3>Copper polygon</h3>
+      <div class="row"><label>Corners</label><span>${o.pts.length}</span></div>
+      <div class="row"><label>Area</label><span>${fmt(polyArea(o.pts))} mm²</span></div>
+      <div class="hint">Polygons are filled copper with no automatic clearance: leave gaps around pads and traces yourself.</div>
+      <div class="row"><button id="pDel" class="danger">Delete</button></div></div>`;
   } else {
     html = `<div class="sec"><h3>Design</h3>
       <div class="row"><label>Name</label><input type="text" id="pName" value="${esc(D.name)}"></div>
@@ -729,7 +1155,9 @@ function renderProps() {
       ${add(numField('Board height', D.board.h, v => { D.board.h = Math.max(0, r4(v)); }, 1))}
       <div class="hint">Set width/height to 0 for no board outline. Board origin is the top-left corner.</div>
       <div class="row"><label>Components</label><span>${D.components.length}</span></div>
-      <div class="row"><label>Traces</label><span>${D.traces.length}</span></div></div>`;
+      <div class="row"><label>Traces</label><span>${D.traces.length}</span></div>
+      <div class="row"><label>Polygons</label><span>${D.polys.length}</span></div>
+      <div class="row"><label>Texts</label><span>${D.texts.length}</span></div></div>`;
   }
   el.innerHTML = html;
   el.querySelectorAll('input[data-f]').forEach((inp, i) => inp.onchange = () => {
@@ -741,13 +1169,18 @@ function renderProps() {
   if (q('#pRef')) q('#pRef').onchange = e => { pushUndo(); o.ref = e.target.value.trim() || o.ref; changed(); };
   if (q('#pName')) q('#pName').onchange = e => { pushUndo(); D.name = e.target.value.trim() || 'Untitled board'; changed(); };
   if (q('#pRot')) q('#pRot').onchange = e => rotateComp(o, +e.target.value - o.rot);
+  if (q('#pText')) q('#pText').onchange = e => { const v = e.target.value; if (v.trim()) { pushUndo(); o.s = v; changed(); } };
+  if (q('#pTRot')) q('#pTRot').onchange = e => { pushUndo(); o.rot = normRot(+e.target.value); changed(); };
+  if (q('#pTMir')) q('#pTMir').onchange = e => { pushUndo(); o.mirror = e.target.checked; changed(); };
+  if (q('#pCMir')) q('#pCMir').onchange = e => mirrorComp(o, e.target.checked);
   if (q('#pRotBtn')) q('#pRotBtn').onclick = () => rotateComp(o, 90);
   if (q('#pDel')) q('#pDel').onclick = deleteSel;
 }
+function mirrorComp(c, on = !c.mirror) { pushUndo(); const ends = attachedEnds(c); c.mirror = on; reattach(c, ends); changed(); }
 function rotateComp(c, by) { pushUndo(); const ends = attachedEnds(c); c.rot = normRot(c.rot + by); reattach(c, ends); changed(); }
 function deleteSel() {
   if (!sel) return; pushUndo();
-  if (sel.kind === 'comp') D.components = D.components.filter(c => c.id !== sel.id); else D.traces = D.traces.filter(t => t.id !== sel.id);
+  const k = SEL_LIST[sel.kind]; D[k] = D[k].filter(x => x.id !== sel.id);
   sel = null; changed();
 }
 function nextRef(prefix) {
@@ -758,12 +1191,14 @@ function nextRef(prefix) {
 
 /* ---------------- status ---------------- */
 function updateStatus(shownStep) {
-  const p = tool === 'trace' ? snapAt(mouse) : snapAt(mouse, {pins:false});
+  const p = tool === 'trace' || tool === 'poly' ? snapAt(mouse) : snapAt(mouse, {pins:false});
   $('#stPos').innerHTML = `X <b>${p.x.toFixed(3)}</b> Y <b>${p.y.toFixed(3)}</b> mm` + (p.pin ? ` &nbsp;${t('pin')} <b>${esc(p.pin.ref)}.${esc(p.pin.num)}</b>` : '');
   $('#stGrid').innerHTML = `${t('grid')} <b>${fmt(D.settings.grid)} mm</b>${D.settings.snap ? '' : ' ' + t('(snap off)')}${shownStep && Math.abs(shownStep - D.settings.grid) > 1e-9 ? ' · ' + t('lines every {0} mm', fmt(shownStep)) : ''} · ${t('zoom {0} px/mm', fmt(V.s))}`;
   const hints = {select:t('Click to select, drag to move. Drag empty area to pan.'),
     trace:draft ? t('Click to add corners; click a pin or press Enter / double-click / right-click to finish. / flips the corner. Esc cancels.') : t('Click a pin or point to start a trace ({0} mode, width {1} mm).', D.settings.angleMode === 'any' ? t('any angle') : D.settings.angleMode + '°', fmt(D.settings.traceWidth)),
-    place:t('Click to place. R rotates. Esc or right-click stops placing.')};
+    place:t('Click to place. R rotates, M mirrors. Esc or right-click stops placing.') + (placeMirror ? ' (' + t('mirrored') + ')' : ''),
+    poly:draft ? t('Click to add corners; click the first corner or press Enter / double-click / right-click to close the polygon. Esc cancels.') : t('Click to start a copper polygon ({0} mode).', D.settings.angleMode === 'any' ? t('any angle') : D.settings.angleMode + '°'),
+    text:t('Click where the text should start (bottom-left corner).')};
   $('#stHint').textContent = hints[tool];
 }
 
@@ -780,14 +1215,14 @@ cv.addEventListener('mousedown', e => {
   const m = evWorld(e, cv, V); Object.assign(mouse, m, {in:true});
   if (e.button === 1 || (e.button === 0 && spaceDown)) { drag = {type:'pan', sx:m.sx, sy:m.sy, vx:V.x, vy:V.y}; e.preventDefault(); return; }
   if (e.button === 2) {
-    if (tool === 'trace' && draft) finishTrace(); else if (tool === 'place') setTool('select'); else if (tool === 'trace') setTool('select');
+    if ((tool === 'trace' || tool === 'poly') && draft) finishTrace(); else if (tool !== 'select') setTool('select');
     return;
   }
   if (e.button !== 0) return;
   if (tool === 'place') {
     const lib = libById(placeLib); if (!lib) return setTool('select');
     const p = snapAt(m, {pins:false}); pushUndo();
-    const c = {id:uid(), lib:lib.id, ref:nextRef(lib.prefix), x:p.x, y:p.y, rot:placeRot};
+    const c = {id:uid(), lib:lib.id, ref:nextRef(lib.prefix), x:p.x, y:p.y, rot:placeRot, mirror:placeMirror};
     D.components.push(c); sel = {kind:'comp', id:c.id}; changed(); return;
   }
   if (tool === 'trace') {
@@ -799,10 +1234,25 @@ cv.addEventListener('mousedown', e => {
     if ((p.pin || p.node) && cleanPts(draft.pts).length >= 2) finishTrace();
     requestRender(); return;
   }
+  if (tool === 'poly') {
+    const p = snapAt(m);
+    if (!draft) { draft = {pts:[{x:p.x, y:p.y}]}; requestRender(); return; }
+    const last = draft.pts[draft.pts.length - 1];
+    if (e.detail >= 2 && dist(last, p) < 1e-6) return;
+    draft.pts.push(...route(last, p, D.settings.angleMode, routeFlip));
+    if (draft.pts.length > 3 && dist(p, draft.pts[0]) < 1e-6) finishPoly();
+    requestRender(); return;
+  }
+  if (tool === 'text') {
+    e.preventDefault();   // keep focus in the text box we are about to open
+    openTextEditor(snapAt(m, {pins:false}));
+    return;
+  }
   // select
   const h = hitTest(m); sel = h;
   if (h && h.kind === 'comp') { const c = findSel(); drag = {type:'comp', c, x0:c.x, y0:c.y, m0:{x:m.x, y:m.y}, ends:attachedEnds(c), snap:snapshot(), moved:false}; }
-  else if (h && h.kind === 'trace') { const t = findSel(); drag = {type:'trace', t, pts0:clone(t.pts), m0:{x:m.x, y:m.y}, snap:snapshot(), moved:false}; }
+  else if (h && (h.kind === 'trace' || h.kind === 'poly')) { const o = findSel(); drag = {type:'trace', t:o, pts0:clone(o.pts), m0:{x:m.x, y:m.y}, snap:snapshot(), moved:false}; }
+  else if (h && h.kind === 'text') { const o = findSel(); drag = {type:'text', o, x0:o.x, y0:o.y, m0:{x:m.x, y:m.y}, snap:snapshot(), moved:false}; }
   else drag = {type:'pan', sx:m.sx, sy:m.sy, vx:V.x, vy:V.y};
   changed();
 });
@@ -823,18 +1273,52 @@ window.addEventListener('mousemove', e => {
     const dx = s(m.x - drag.m0.x), dy = s(m.y - drag.m0.y);
     if (dx || dy) drag.moved = true;
     drag.t.pts = drag.pts0.map(p => ({x:r4(p.x + dx), y:r4(p.y + dy)}));
+  } else if (drag && drag.type === 'text') {
+    const s = D.settings.snap ? snapG : r4;
+    const nx = s(drag.x0 + m.x - drag.m0.x), ny = s(drag.y0 + m.y - drag.m0.y);
+    if (nx !== drag.o.x || ny !== drag.o.y) drag.moved = true;
+    drag.o.x = nx; drag.o.y = ny;
   }
   requestRender();
 });
 window.addEventListener('mouseup', () => {
   if (fpOpen || !drag) return;
-  if ((drag.type === 'comp' || drag.type === 'trace') && drag.moved) { pushUndo(drag.snap); changed(); }
+  if (drag.type !== 'pan' && drag.moved) { pushUndo(drag.snap); changed(); }
   drag = null;
 });
-cv.addEventListener('dblclick', e => { if (tool === 'trace') finishTrace(); });
+// on-canvas text entry box (a browser prompt() can be blocked, so text is typed into this box instead)
+let textPending = null;
+function openTextEditor(p) {
+  if (textPending) commitText();
+  textPending = {x:p.x, y:p.y};
+  const ed = $('#textEd'), r = $('#stage').getBoundingClientRect();
+  const sx = (p.x - V.x) * V.s, sy = (p.y - V.y) * V.s;
+  ed.classList.remove('hidden');
+  ed.style.left = Math.max(4, Math.min(sx, r.width - ed.offsetWidth - 4)) + 'px';
+  ed.style.top = Math.max(4, Math.min(sy + 8, r.height - ed.offsetHeight - 4)) + 'px';
+  const inp = $('#textEdIn'); inp.value = ''; inp.focus();
+  requestRender();
+}
+function commitText(cancel = false) {
+  const p = textPending; textPending = null;
+  $('#textEd').classList.add('hidden');
+  const s = $('#textEdIn').value; $('#textEdIn').value = '';
+  if (!cancel && p && s.trim()) {
+    pushUndo(); const o = {id:uid(), s, x:p.x, y:p.y, h:D.settings.textHeight || 2, rot:0, mirror:true};
+    D.texts.push(o); sel = {kind:'text', id:o.id}; changed();
+  }
+  requestRender();
+}
+$('#textEdIn').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); commitText(); }
+  else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); commitText(true); }
+});
+$('#textEdIn').addEventListener('blur', () => { if (textPending) commitText(); });
+cv.addEventListener('dblclick', e => { if (tool === 'trace' || tool === 'poly') finishTrace(); });
 
 window.addEventListener('keydown', e => {
   if (fpOpen) return fpKey(e);
+  if (libOpen) { if (e.key === 'Escape') closeLib(); return; }
   if (!$('#pdfModal').classList.contains('hidden')) { if (e.key === 'Escape') closePdf(); return; }
   const inField = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   const k = e.key.toLowerCase();
@@ -847,16 +1331,26 @@ window.addEventListener('keydown', e => {
   if (e.key === ' ') { spaceDown = true; e.preventDefault(); return; }
   if (e.key === 'Escape') { if (draft) { draft = null; requestRender(); } else if (tool !== 'select') setTool('select'); else { sel = null; changed(); } return; }
   if (e.key === 'Enter') { if (draft) finishTrace(); return; }
-  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); if (tool === 'trace' && draft) { draft.pts.pop(); if (!draft.pts.length) draft = null; requestRender(); } else deleteSel(); return; }
+  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); if ((tool === 'trace' || tool === 'poly') && draft) { draft.pts.pop(); if (!draft.pts.length) draft = null; requestRender(); } else deleteSel(); return; }
   if (k === 'v' || k === 's') return setTool('select');
   if (k === 't' || k === 'w') return setTool('trace');
   if (k === 'f') return fitView();
+  if (k === 'l') { e.preventDefault(); return openLib(); }
+  if (k === 'p') return setTool('poly');
+  if (k === 'x') return setTool('text');
   if (k === 'g') { D.settings.snap = !D.settings.snap; syncToolbar(); return changed(); }
   if (k === 'a') { const m = ['any', '45', '90']; D.settings.angleMode = m[(m.indexOf(D.settings.angleMode) + 1) % 3]; syncToolbar(); return changed(); }
   if (e.key === '/') { routeFlip = !routeFlip; return requestRender(); }
+  if (k === 'm') {
+    if (tool === 'place') { placeMirror = !placeMirror; return requestRender(); }
+    const o = findSel(); if (o && sel.kind === 'comp') mirrorComp(o);
+    if (o && sel.kind === 'text') { pushUndo(); o.mirror = !o.mirror; changed(); }
+    return;
+  }
   if (k === 'r') {
     if (tool === 'place') { placeRot = normRot(placeRot + (e.shiftKey ? 270 : 90)); return requestRender(); }
     const o = findSel(); if (o && sel.kind === 'comp') rotateComp(o, e.shiftKey ? 270 : 90);
+    if (o && sel.kind === 'text') { pushUndo(); o.rot = normRot(o.rot + (e.shiftKey ? 270 : 90)); changed(); }
   }
 });
 window.addEventListener('keyup', e => { if (e.key === ' ') spaceDown = false; });
@@ -875,7 +1369,10 @@ function padDefaults(type) {
 function setPadDefaultsUI(d) { $('#dShape').value = d.shape; $('#dW').value = d.w; $('#dH').value = d.h; $('#dDrill').value = d.drill; }
 function openFpEditor(lib) {
   fpOrigId = lib ? lib.id : null;
-  FP = lib ? clone(lib) : {id:uid(), name:'New footprint', prefix:'U', type:'tht', pads:[], silk:[]};
+  const near = libById(libSelId);
+  FP = lib ? clone(lib) : {id:uid(), name:t('New footprint'), prefix:near ? near.prefix : 'U', type:near ? near.type : 'tht', category:near ? near.category : 'Other', pads:[], silk:[]};
+  $('#catList').innerHTML = [...new Set([...CATS, ...categories()])].map(c => `<option value="${esc(c)}">`).join('');
+  $('#fCat').value = FP.category || guessCat(FP);
   fpSel = null; fpDraft = null; fpTool = lib ? 'select' : 'pad';
   $('#fName').value = FP.name; $('#fPrefix').value = FP.prefix; $('#fType').value = FP.type;
   setPadDefaultsUI(padDefaults(FP.type));
@@ -884,7 +1381,10 @@ function openFpEditor(lib) {
   setTool(tool === 'place' ? 'select' : tool);
   requestAnimationFrame(() => { resizeCanvas(fcv); fpFit(); fpSync(); });
 }
-function closeFp() { fpOpen = false; $('#fpModal').classList.add('hidden'); fpDrag = null; requestRender(); }
+function closeFp() {
+  fpOpen = false; $('#fpModal').classList.add('hidden'); fpDrag = null; requestRender();
+  if (libOpen) { renderLib(); libPreview(); $('#libSearch').focus(); }
+}
 function fpFit() {
   const b = FP.pads.length || FP.silk.length ? libLocalBBox(FP) : {x0:-6, y0:-6, x1:6, y1:6};
   fitView(FV, fcv, {x0:Math.min(b.x0, -3) - 2, y0:Math.min(b.y0, -3) - 2, x1:Math.max(b.x1, 3) + 2, y1:Math.max(b.y1, 3) + 2});
@@ -985,7 +1485,7 @@ $('#fgNum').onchange = e => { const v = +e.target.value; if (v > 0) { fpGrid = r
 $('#fSnap').onchange = fpRender; $('#fFit').onclick = fpFit;
 $('#fCancel').onclick = closeFp;
 $('#fSave').onclick = () => {
-  FP.name = $('#fName').value.trim(); FP.prefix = $('#fPrefix').value.trim() || 'U';
+  FP.name = $('#fName').value.trim(); FP.prefix = $('#fPrefix').value.trim() || 'U'; FP.category = $('#fCat').value.trim() || guessCat(FP);
   if (!FP.name) return alert(t('Please give the footprint a name.'));
   if (!FP.pads.length) return alert(t('A footprint needs at least one pad.'));
   const nums = FP.pads.map(p => p.num); if (new Set(nums).size !== nums.length && !confirm(t('Some pads share the same number. Save anyway?'))) return;
@@ -997,6 +1497,7 @@ $('#fSave').onclick = () => {
     D.library[i] = clone(FP);
     for (const x of inst) reattach(x.c, x.ends);
   } else D.library.push(clone(FP));
+  libSelId = FP.id; revealInTree(FP.id);
   closeFp(); changed(true);
 };
 fcv.addEventListener('contextmenu', e => e.preventDefault());
@@ -1085,6 +1586,15 @@ function pdfPainter(out) {
       const tw = String(s).length * size * 0.55;
       out.push(`q ${gray(l)} g 1 0 0 -1 ${n(x)} ${n(y)} cm BT /F1 ${n(size)} Tf ${n(-tw / 2)} ${n(-size * 0.35)} Td (${str}) Tj ET Q`);
     },
+    poly(pts, l) {
+      if (pts.length < 3) return;
+      out.push(`${gray(l)} g ${n(pts[0].x)} ${n(pts[0].y)} m`); for (let i = 1; i < pts.length; i++) out.push(`${n(pts[i].x)} ${n(pts[i].y)} l`); out.push('h f');
+    },
+    ctext(o, l) {
+      const a = (o.rot || 0) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+      out.push(`q ${n(c)} ${n(s)} ${n(-s)} ${n(c)} ${n(o.x)} ${n(o.y)} cm` + (o.mirror ? ' -1 0 0 1 0 0 cm' : '') +
+        ` 1 0 0 -1 0 0 cm ${gray(l)} g BT /F2 ${n(o.h)} Tf 0 0 Td (${pdfStr(o.s)}) Tj ET Q`);
+    },
   };
   return P;
 }
@@ -1098,8 +1608,10 @@ function pageContent(layer, o, page, B) {
   out.push(`1 0 0 1 ${n(tx)} ${n(ty)} cm`);
   const P = pdfPainter(out);
   if (layer === 'copper') {
+    for (const g of D.polys) P.poly(g.pts, 'copper');
     for (const t of D.traces) tracePrims(P, t);
     for (const c of D.components) { const lib = libById(c.lib); if (lib) copperPrims(P, lib, c); }
+    for (const x of D.texts) P.ctext(x, 'copper');
     if (o.holes) for (const c of D.components) { const lib = libById(c.lib); if (lib) holePrims(P, lib, c); }
   } else {
     for (const c of D.components) { const lib = libById(c.lib); if (!lib) continue; silkPrims(P, lib, c); const rp = refPos(c, lib); P.text(c.ref, rp.x, rp.y, 1.3, 'silk'); }
@@ -1126,8 +1638,10 @@ function buildPdf(contents, page) {
   objs[1] = '<< /Type /Catalog /Pages 2 0 R /ViewerPreferences << /PrintScaling /None >> >>';
   objs[2] = `<< /Type /Pages /Kids [${kids}] /Count ${contents.length} >>`;
   objs[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
+  const f2 = 4 + contents.length * 2;
+  objs[f2] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>';
   contents.forEach((c, i) => {
-    objs[4 + i * 2] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 3 0 R >> >> /Contents ${5 + i * 2} 0 R >>`;
+    objs[4 + i * 2] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 3 0 R /F2 ${f2} 0 R >> >> /Contents ${5 + i * 2} 0 R >>`;
     objs[5 + i * 2] = `<< /Length ${c.length} >>\nstream\n${c}\nendstream`;
   });
   let pdf = '%PDF-1.4\n%\xe2\xe3\xcf\xd3\n'; const offs = [];
@@ -1238,6 +1752,24 @@ const HU = {
   'The board is larger than the printable area of A4 and will be cut off at the edges.':'A panel nagyobb az A4 nyomtatható területénél, a szélei levágódnak.',
   'copper':'réz', 'silkscreen':'szitanyomat', '(mirrored)':'(tükrözve)', 'scale 1:1':'méretarány 1:1',
   'print at Actual size / 100%':'nyomtatás Tényleges méret / 100%', '50 mm scale check':'50 mm méretarány-ellenőrzés',
+  // library overlay, categories, text and polygons
+  'Library':'Könyvtár', 'Polygon':'Poligon', 'Text':'Szöveg', 'Open the component library (L)':'Alkatrészkönyvtár megnyitása (L)',
+  'Draw copper polygon (P)':'Réz poligon rajzolása (P)', 'Place copper text (X)':'Réz szöveg elhelyezése (X)',
+  'library':'könyvtár', 'polygon':'poligon', 'text':'szöveg', 'Category':'Kategória',
+  'Search components (name, package, category)…':'Alkatrész keresése (név, tokozás, kategória)…', 'Close (Esc)':'Bezárás (Esc)',
+  '↑ ↓ choose · Enter selects / places · double-click places · Esc closes':'↑ ↓ választás · Enter kiválaszt / lehelyez · dupla kattintás lehelyez · Esc bezár',
+  'RCL':'RCL (passzív)', 'Modules':'Modulok', 'Diodes':'Diódák', 'Transistors':'Tranzisztorok', 'ICs':'IC-k', 'Connectors':'Csatlakozók', 'Other':'Egyéb',
+  'No matching components.':'Nincs találat.', 'Select a component in the tree to see its footprint.':'Válassz egy alkatrészt a fában a footprint megtekintéséhez.',
+  '{0} pads':'{0} forrszem', '{0} drilled':'{0} furatos', 'ref':'jelölés', 'Place on board':'Lehelyezés a panelen', 'Copy':'Másolás', 'copy':'másolat',
+  'New footprint':'Új footprint', 'Height (mm)':'Magasság (mm)', 'Mirrored (reads correctly from the copper side)':'Tükrözött (a rézoldalról nézve olvasható)',
+  'Copper polygon':'Réz poligon', 'Corners':'Sarokpontok', 'Area':'Terület', 'Polygons':'Poligonok', 'Texts':'Szövegek',
+  'Polygons are filled copper with no automatic clearance: leave gaps around pads and traces yourself.':'A poligon kitöltött rézfelület automatikus szigetelési távolság nélkül: a forrszemek és vezetékek körül hagyj rést.',
+  'Click to add corners; click the first corner or press Enter / double-click / right-click to close the polygon. Esc cancels.':'Kattintással sarokpontot adsz hozzá; az első sarokpontra kattintás, Enter, dupla kattintás vagy jobb klikk lezárja a poligont. Az Esc megszakítja.',
+  'Click to start a copper polygon ({0} mode).':'Kattints a réz poligon indításához ({0} mód).',
+  'Click where the text should start (bottom-left corner).':'Kattints oda, ahol a szöveg kezdődjön (bal alsó sarok).',
+  'Text to place on the copper layer:':'A rézrétegre kerülő szöveg:', 'Mirrored (placed on the copper side)':'Tükrözött (a rézoldalra kerül)',
+  'Click to place. R rotates, M mirrors. Esc or right-click stops placing.':'Kattints a lehelyezéshez. R forgat, M tükröz, Esc vagy jobb klikk befejezi.', 'mirrored':'tükrözve',
+  'mirror component / text':'alkatrész / szöveg tükrözése', 'Enter places the text · Esc cancels':'Enter elhelyezi a szöveget · Esc mégse',
 };
 let LANG = 'en';
 try { LANG = localStorage.getItem('pcbpainter.lang') || ((navigator.language || '').toLowerCase().startsWith('hu') ? 'hu' : 'en'); } catch (e) {}
@@ -1263,6 +1795,10 @@ function translateNode(root) {
   for (const el of els) if (el.hasAttribute && el.hasAttribute('title')) {
     if (el.__enTitle === undefined) el.__enTitle = el.getAttribute('title');
     el.setAttribute('title', tr(el.__enTitle));
+  }
+  for (const el of [root, ...root.querySelectorAll('[placeholder]')]) if (el.hasAttribute && el.hasAttribute('placeholder')) {
+    if (el.__enPh === undefined) el.__enPh = el.getAttribute('placeholder');
+    el.setAttribute('placeholder', tr(el.__enPh));
   }
   const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); let n;
   while ((n = w.nextNode())) translateNode(n);
