@@ -388,6 +388,20 @@ function extraTransistorLibrary() {
     {id:'to247', name:'TO-247 vertical', prefix:'Q', type:T,
       pads:[thtPad(1,-5.45,0,2.6,1.5,'rect',3.2), thtPad(2,0,0,2.6,1.5,'oblong',3.2), thtPad(3,5.45,0,2.6,1.5,'oblong',3.2)],
       silk:[...sRect(-8.1,-3.6,8.1,1.8), sLine(-8.1,-2.2,8.1,-2.2)]},
+    // SM4THT: through-hole transistors with their leads bent onto surface pads (no hole);
+    // pads are stretched away from the body so the bent lead lands on them
+    {id:'to92_sm4tht', name:'TO-92 SM4THT', prefix:'Q', type:'sm4tht',
+      pads:[smdPad(1,-2.54,1.0,1.3,2.6), smdPad(2,0,1.0,1.3,2.6), smdPad(3,2.54,1.0,1.3,2.6)],
+      silk:[sLine(-2.6,-0.6,-1.5,-2.2), sLine(-1.5,-2.2,0,-2.6), sLine(0,-2.6,1.5,-2.2), sLine(1.5,-2.2,2.6,-0.6), sLine(-2.6,-0.6,2.6,-0.6)]},
+    {id:'to18_sm4tht', name:'TO-18 / TO-5 SM4THT', prefix:'Q', type:'sm4tht',
+      pads:[smdPad(1,-3.6,0,2.4,1.4), smdPad(2,0,-3.6,1.4,2.4), smdPad(3,3.6,0,2.4,1.4)],
+      silk:[{t:'circle', x:0, y:0, r:2.4, w:0.15}, sLine(-1.9,1.9,-2.5,2.5)]},
+    {id:'to220v_sm4tht', name:'TO-220 vertical SM4THT', prefix:'Q', type:'sm4tht',
+      pads:[smdPad(1,-2.54,1.6,1.8,3.4), smdPad(2,0,1.6,1.8,3.4), smdPad(3,2.54,1.6,1.8,3.4)],
+      silk:[...sRect(-5.2,-4.6,5.2,-0.3), sLine(-5.2,-3.3,5.2,-3.3)]},
+    {id:'to220h_sm4tht', name:'TO-220 lying SM4THT', prefix:'Q', type:'sm4tht',
+      pads:[smdPad(1,-2.54,1.0,1.8,3.4), smdPad(2,0,1.0,1.8,3.4), smdPad(3,2.54,1.0,1.8,3.4)],
+      silk:[...sRect(-5.2,-17.0,5.2,-1.2), sLine(-5.2,-10.7,5.2,-10.7), {t:'circle', x:0, y:-13.7, r:1.8, w:0.15}]},
     {id:'sot323', name:'SOT-323 (SC-70)', prefix:'Q', type:'smd',
       pads:[smdPad(1,-0.65,0.95,0.6,0.7), smdPad(2,0.65,0.95,0.6,0.7), smdPad(3,0,-0.95,0.6,0.7)],
       silk:[sLine(-1.1,-0.4,-0.5,-0.4), sLine(0.5,-0.4,1.1,-0.4), sLine(-1.1,-0.4,-1.1,0.3), sLine(1.1,-0.4,1.1,0.3)]},
@@ -529,7 +543,7 @@ function baseLibrary() {
 }
 
 function newDesign() {
-  return {format:'pcb-painter', version:6, name:'Untitled board', board:{w:100, h:80},
+  return {format:'pcb-painter', version:7, name:'Untitled board', board:{w:100, h:80},
     settings:{grid:1.27, snap:true, traceWidth:0.8, angleMode:'90', textHeight:2},
     library:defaultLibrary(), components:[], traces:[], texts:[], polys:[]};
 }
@@ -868,7 +882,7 @@ function validateDesign(o) {
   d.traces = o.traces.filter(t => Array.isArray(t.pts) && t.pts.length >= 2).map(t => ({id:t.id || uid(), w:+t.w || 0.5, pts:t.pts.map(p => ({x:+p.x, y:+p.y}))}));
   d.texts = (Array.isArray(o.texts) ? o.texts : []).filter(x => x && x.s).map(x => ({id:x.id || uid(), s:String(x.s), x:+x.x || 0, y:+x.y || 0, h:+x.h || 2, rot:normRot(+x.rot || 0), mirror:!!x.mirror}));
   d.polys = (Array.isArray(o.polys) ? o.polys : []).filter(g => Array.isArray(g.pts) && g.pts.length >= 3).map(g => ({id:g.id || uid(), pts:g.pts.map(p => ({x:+p.x, y:+p.y}))}));
-  // designs from before version 6 get the footprints that were added to the built-in library since
+  // designs from before version 7 get the footprints that were added to the built-in library since
   // version 3 briefly shipped metric-pitch capacitors and standing diodes; drop those that are not used
   if (!(+o.version >= 4)) {
     const old = ['c_disc_2', 'c_disc_2_5', 'c_disc_3', 'c_disc_3_5', 'c_disc_4', 'c_disc_5', 'c_disc_7_5', 'd_stand_2_54', 'd_stand_3_5', 'd_stand_5_08'];
@@ -876,7 +890,7 @@ function validateDesign(o) {
     const lib254 = d.library.find(l => l.id === 'c_disc_254'); if (lib254 && lib254.name === 'Capacitor disc 2.54 mm') lib254.name = 'Capacitor 100 mil';
     for (const l of d.library) { const m = /^Resistor standing (2\.54|5\.08) mm$/.exec(l.name); if (m) l.name = `Resistor standing ${m[1] === '2.54' ? 100 : 200} mil`; }
   }
-  if (!(+o.version >= 6)) for (const l of defaultLibrary()) if (!d.library.some(x => x.id === l.id)) d.library.push(l);
+  if (!(+o.version >= 7)) for (const l of defaultLibrary()) if (!d.library.some(x => x.id === l.id)) d.library.push(l);
   return d;
 }
 function normLib(l) {
@@ -904,7 +918,7 @@ function download(name, blob) {
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 const safeName = s => (s || 'board').replace(/[^\w\-. ]+/g, '_').trim() || 'board';
-function saveDesign() { const out = {...D, format:'pcb-painter', version:6}; saveFile(safeName(D.name) + '.json', JSON.stringify(out, null, 1)); }
+function saveDesign() { const out = {...D, format:'pcb-painter', version:7}; saveFile(safeName(D.name) + '.json', JSON.stringify(out, null, 1)); }
 
 /* ---------------- toolbar ---------------- */
 function fillPresetSelect(selEl, presets) {

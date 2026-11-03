@@ -6,9 +6,9 @@ The whole app is one self-contained file, `index.html`. Open it in Chrome, Edge 
 
 ## Features
 
-- **Component library** with 96 built-in footprints, sorted into categories (RCL, Diodes, Transistors, ICs, Modules, Connectors, Other) and split into SMD, THT and SM4THT under each category:
+- **Component library** with 100 built-in footprints, sorted into categories (RCL, Diodes, Transistors, ICs, Modules, Connectors, Other) and split into SMD, THT and SM4THT under each category:
   - **ICs:** DIP-8 to DIP-40 (300 and 600 mil), SMD DIP (gull-wing) 8 to 40 pins, SOIC-8/14/16, SOIC-16W/20W/28W, MSOP-8, TSSOP-8/14/16/20, TQFP-32/44/48/64, LQFP-100, QFN-16/20/32, SOT-23-5/6.
-  - **Transistors:** TO-92 (2.54 and 1.27 mm), TO-18, TO-126, TO-220 (vertical and lying), TO-247, SOT-23, SOT-323, SOT-143B, SOT-103 (X-package), SOT-89, SOT-223, DPAK and D2PAK.
+  - **Transistors:** TO-92 (2.54 and 1.27 mm), TO-18, TO-126, TO-220 (vertical and lying), TO-247, SOT-23, SOT-323, SOT-143B, SOT-103 (X-package), SOT-89, SOT-223, DPAK and D2PAK; SM4THT versions of TO-92, TO-18 and TO-220 (vertical and lying).
   - **RCL:** capacitors at 100, 200, 300, 400 and 500 mil pitch; electrolytic capacitors from D4 to D16 mm; axial resistors at 300, 400, 500 and 600 mil; standing resistors at 100 and 200 mil; 0805 and 1206; SM4THT resistors and capacitors at 200, 300, 400 and 500 mil. SM4THT parts are through-hole parts whose leads are bent and soldered onto surface pads, so they have no drill holes.
   - **Diodes:** axial at 300, 400 and 500 mil; standing at 100 and 200 mil; 5 mm LED.
   - **Modules:** Raspberry Pi Pico, Waveshare RP2040-Zero and ESP32-C3 SuperMini, soldered on with pin headers.
