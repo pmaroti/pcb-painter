@@ -21,6 +21,7 @@ The whole app is one self-contained file, `index.html`. Open it in Chrome, Edge 
 - **Copper polygons** (P): filled copper areas drawn with the same angle modes as traces. They have no automatic clearance, so leave gaps around pads yourself.
 - **Copper text** (X): bold text on the copper layer, mirrored by default so it reads correctly from the copper side. You can set its height, rotate it and switch mirroring off.
 - **Mirrored components** (M): SMD parts are mirrored automatically when you place them, because they sit on the copper side. You can mirror any part while placing it or afterwards, and traces stay attached to its pins.
+- **Selection, move, copy and paste**: drag on empty space to select an area, or Ctrl+click (Cmd+click on a Mac) to add or remove single components, traces, polygons and texts. Drag any selected item to move the whole selection; traces stay attached to moved pins. Copy, cut, paste (at the mouse position, with new reference names) and delete work on the whole selection.
 - **Grid** with presets in mm and mil, or any custom size. Snap to grid can be turned on and off.
 - **Save and open** designs as plain JSON files. You can also import and export the footprint library on its own.
 - **PDF export** on A4 at true 1:1 scale (vector output). Options: a mirror for toner transfer, drill-hole dots, a board outline, a 50 mm ruler for checking scale, and a separate silkscreen page.
@@ -46,7 +47,12 @@ Print the PDF with **Actual size / 100%** scaling, not "Fit to page". Then measu
 | R | Rotate |
 | G | Snap on/off |
 | F | Fit to view |
-| Del | Delete |
+| Del | Delete the selection |
+| Drag on empty space | Select an area |
+| Ctrl/Cmd+click | Add to or remove from the selection |
+| Ctrl/Cmd+C / X / V | Copy / cut / paste at the mouse |
+| Ctrl/Cmd+A | Select all |
+| Right or middle drag, Space+drag, wheel | Pan / zoom |
 | Enter, double-click, right-click | Finish a trace |
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 | Ctrl+S | Save |
