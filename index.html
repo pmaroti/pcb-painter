@@ -488,7 +488,31 @@ function moduleBoard(id, name, perSide, rowSpacing, boardW, boardH, usbW, extra 
   return {id, name, prefix:'U', type:'tht', category:'Modules', pads:[...pads, ...extra],
     silk:[...sRect(-bx, -by, bx, by), sLine(-u, -by, -u, r4(-by + 1.5)), sLine(-u, r4(-by + 1.5), u, r4(-by + 1.5)), sLine(u, r4(-by + 1.5), u, -by)]};
 }
+// SM4THT copy of a through-hole footprint: same pin positions, rectangular surface pads, no holes.
+// Pads in a vertical column get wide pads, pads in a horizontal row get tall pads, so neighbours do not touch.
+function sm4thtOf(l, long = 2.4, short = 1.6) {
+  const pads = l.pads.map(p => {
+    const rowNeighbour = l.pads.some(q => q !== p && Math.abs(q.y - p.y) < 0.01 && Math.abs(q.x - p.x) < 3);
+    return {...p, shape:'rect', drill:0, w:rowNeighbour ? short : long, h:rowNeighbour ? long : short, tx:0, ty:0};
+  });
+  return {...clone(l), id:l.id + '_sm4tht', name:l.name + ' SM4THT', type:'sm4tht', pads};
+}
+function connectorLibrary() {
+  const L = [header(2), header(3), header(4)].map(h => sm4thtOf({...h, category:'Connectors'}));
+  for (const d of [2, 2.5]) {
+    const n = mmName(d).replace('.', '_');
+    L.push({id:'tp_round_' + n, name:`Test point round ${mmName(d)} mm`, prefix:'TP', type:'smd', category:'Connectors',
+      pads:[{num:'1', x:0, y:0, shape:'round', w:d, h:d, drill:0, tx:0, ty:0}], silk:[{t:'circle', x:0, y:0, r:r4(d / 2 + 0.4), w:0.15}]});
+    L.push({id:'tp_rect_' + n, name:`Test point rectangular ${mmName(d)} mm`, prefix:'TP', type:'smd', category:'Connectors',
+      pads:[smdPad(1, 0, 0, d, d)], silk:sRect(r4(-d / 2 - 0.4), r4(-d / 2 - 0.4), r4(d / 2 + 0.4), r4(d / 2 + 0.4))});
+  }
+  return L;
+}
 function moduleLibrary() {
+  const m = baseModules();
+  return [...m, ...m.map(x => sm4thtOf(x))];
+}
+function baseModules() {
   return [
     // Raspberry Pi Pico: 21 x 51 mm, 2 x 20 pins, rows 17.78 mm apart; SWD pads at the far end
     moduleBoard('rpi_pico', 'Raspberry Pi Pico', 20, 17.78, 21, 51, 8,
@@ -509,7 +533,7 @@ function guessCat(l) {
   return 'Other';
 }
 function defaultLibrary() {
-  return [...baseLibrary(), ...extraPassiveLibrary(), ...extraIcLibrary(), ...extraTransistorLibrary(), ...moduleLibrary()].map(l => ({...l, category:l.category || guessCat(l)}));
+  return [...baseLibrary(), ...extraPassiveLibrary(), ...extraIcLibrary(), ...extraTransistorLibrary(), ...moduleLibrary(), ...connectorLibrary()].map(l => ({...l, category:l.category || guessCat(l)}));
 }
 function baseLibrary() {
   return [
@@ -543,7 +567,7 @@ function baseLibrary() {
 }
 
 function newDesign() {
-  return {format:'pcb-painter', version:7, name:'Untitled board', board:{w:100, h:80},
+  return {format:'pcb-painter', version:8, name:'Untitled board', board:{w:100, h:80},
     settings:{grid:1.27, snap:true, traceWidth:0.8, angleMode:'90', textHeight:2},
     library:defaultLibrary(), components:[], traces:[], texts:[], polys:[]};
 }
@@ -882,7 +906,7 @@ function validateDesign(o) {
   d.traces = o.traces.filter(t => Array.isArray(t.pts) && t.pts.length >= 2).map(t => ({id:t.id || uid(), w:+t.w || 0.5, pts:t.pts.map(p => ({x:+p.x, y:+p.y}))}));
   d.texts = (Array.isArray(o.texts) ? o.texts : []).filter(x => x && x.s).map(x => ({id:x.id || uid(), s:String(x.s), x:+x.x || 0, y:+x.y || 0, h:+x.h || 2, rot:normRot(+x.rot || 0), mirror:!!x.mirror}));
   d.polys = (Array.isArray(o.polys) ? o.polys : []).filter(g => Array.isArray(g.pts) && g.pts.length >= 3).map(g => ({id:g.id || uid(), pts:g.pts.map(p => ({x:+p.x, y:+p.y}))}));
-  // designs from before version 7 get the footprints that were added to the built-in library since
+  // designs from before version 8 get the footprints that were added to the built-in library since
   // version 3 briefly shipped metric-pitch capacitors and standing diodes; drop those that are not used
   if (!(+o.version >= 4)) {
     const old = ['c_disc_2', 'c_disc_2_5', 'c_disc_3', 'c_disc_3_5', 'c_disc_4', 'c_disc_5', 'c_disc_7_5', 'd_stand_2_54', 'd_stand_3_5', 'd_stand_5_08'];
@@ -890,7 +914,7 @@ function validateDesign(o) {
     const lib254 = d.library.find(l => l.id === 'c_disc_254'); if (lib254 && lib254.name === 'Capacitor disc 2.54 mm') lib254.name = 'Capacitor 100 mil';
     for (const l of d.library) { const m = /^Resistor standing (2\.54|5\.08) mm$/.exec(l.name); if (m) l.name = `Resistor standing ${m[1] === '2.54' ? 100 : 200} mil`; }
   }
-  if (!(+o.version >= 7)) for (const l of defaultLibrary()) if (!d.library.some(x => x.id === l.id)) d.library.push(l);
+  if (!(+o.version >= 8)) for (const l of defaultLibrary()) if (!d.library.some(x => x.id === l.id)) d.library.push(l);
   return d;
 }
 function normLib(l) {
@@ -918,7 +942,7 @@ function download(name, blob) {
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 const safeName = s => (s || 'board').replace(/[^\w\-. ]+/g, '_').trim() || 'board';
-function saveDesign() { const out = {...D, format:'pcb-painter', version:7}; saveFile(safeName(D.name) + '.json', JSON.stringify(out, null, 1)); }
+function saveDesign() { const out = {...D, format:'pcb-painter', version:8}; saveFile(safeName(D.name) + '.json', JSON.stringify(out, null, 1)); }
 
 /* ---------------- toolbar ---------------- */
 function fillPresetSelect(selEl, presets) {
